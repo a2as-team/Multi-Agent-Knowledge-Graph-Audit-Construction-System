@@ -51,3 +51,4 @@ def get_approved_files(tool_context: ToolContext):
     files = tool_context.state[APPROVED_FILES]
     return tool_success("approved_files", files)
 
+

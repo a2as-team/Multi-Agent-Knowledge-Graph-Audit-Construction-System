@@ -10,6 +10,7 @@ from typing import Dict, Any
 from google.adk.tools import ToolContext
 
 from src.utils.constants import ALL_AVAILABLE_FILES
+from src.utils.config import get_neo4j_import_dir
 from src.utils.logger import logger
 from src.neo4j.neo4j_for_adk import tool_success, tool_error
 
@@ -24,7 +25,12 @@ def get_data_directory() -> Path:
     Returns:
         Path object pointing to the data directory
     """
-    # Try to get from environment variable first
+    # Try to get from Neo4j import directory first (if configured)
+    neo4j_import_dir = get_neo4j_import_dir()
+    if neo4j_import_dir:
+        return Path(neo4j_import_dir)
+    
+    # Try to get from environment variable
     data_dir = os.getenv("DATA_DIRECTORY")
     if data_dir:
         return Path(data_dir)
