@@ -55,9 +55,19 @@ def initialize_agent(initial_state: Dict[str, Any]):
             fact_extraction_agent,
             initial_state=initial_state
         )
+        # Verify the caller is properly initialized
+        if asyncio.iscoroutine(caller):
+            caller = await caller
         return caller
     
-    return asyncio.run(_init())
+    try:
+        result = asyncio.run(_init())
+        # Final check that result is not a coroutine
+        if asyncio.iscoroutine(result):
+            raise ValueError("Agent caller initialization returned a coroutine instead of an object")
+        return result
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize agent: {e}") from e
 
 
 def reset_session():
@@ -66,9 +76,14 @@ def reset_session():
         try:
             async def clear_agent_session():
                 session = await st.session_state.agent_caller.get_session()
-                session.state.clear()
+                # Ensure session is not a coroutine
+                if asyncio.iscoroutine(session):
+                    session = await session
+                if hasattr(session, 'state'):
+                    session.state.clear()
             asyncio.run(clear_agent_session())
         except Exception as e:
+            # Silently fail - session will be cleared anyway
             pass
     
     st.session_state.agent_caller = None
@@ -278,10 +293,19 @@ st.header("Session State")
 
 if st.session_state.agent_caller is not None:
     try:
-        async def get_session():
-            return await st.session_state.agent_caller.get_session()
+        async def get_session_state():
+            session = await st.session_state.agent_caller.get_session()
+            # Ensure session is not a coroutine
+            if asyncio.iscoroutine(session):
+                session = await session
+            return session
         
-        session = asyncio.run(get_session())
+        session = asyncio.run(get_session_state())
+        
+        # Verify session has state attribute
+        if not hasattr(session, 'state'):
+            st.error("Session object is invalid. Please try resetting and reinitializing the agent.")
+            st.stop()
         
         # Display relevant state keys
         col1, col2 = st.columns(2)
