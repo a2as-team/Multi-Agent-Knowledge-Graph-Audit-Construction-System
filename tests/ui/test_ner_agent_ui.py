@@ -1,0 +1,295 @@
+"""
+Streamlit UI for testing the NER (Named Entity Recognition) Agent.
+
+This UI allows interactive testing of the NER Agent with:
+- Chat interface for user interaction
+- Session state viewer
+- Verbose logging toggle
+- Reset session functionality
+"""
+import streamlit as st
+import asyncio
+from typing import Dict, Any
+import sys
+from pathlib import Path
+
+# Add project root to sys.path for module imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.agents.ner_agent import ner_agent
+from src.utils.helper import make_agent_caller, AgentCaller
+from src.utils.constants import (
+    APPROVED_USER_GOAL,
+    APPROVED_FILES,
+    APPROVED_CONSTRUCTION_PLAN,
+    PROPOSED_ENTITIES,
+    APPROVED_ENTITIES
+)
+
+
+# Page configuration
+st.set_page_config(
+    page_title="NER Agent Test",
+    page_icon="🏷️",
+    layout="wide"
+)
+
+st.title("🏷️ NER Agent Test UI")
+st.markdown("Test the Named Entity Recognition Agent for proposing entity types from unstructured data")
+
+# Initialize session state
+if "agent_caller" not in st.session_state:
+    st.session_state.agent_caller = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "verbose_logging" not in st.session_state:
+    st.session_state.verbose_logging = False
+
+
+def initialize_agent(initial_state: Dict[str, Any]):
+    """Initialize the agent caller with required state."""
+    async def _init():
+        caller = await make_agent_caller(
+            ner_agent,
+            initial_state=initial_state
+        )
+        return caller
+    
+    return asyncio.run(_init())
+
+
+def reset_session():
+    """Reset the session state."""
+    if st.session_state.agent_caller is not None:
+        try:
+            async def clear_agent_session():
+                session = await st.session_state.agent_caller.get_session()
+                session.state.clear()
+            asyncio.run(clear_agent_session())
+        except Exception as e:
+            pass
+    
+    st.session_state.agent_caller = None
+    st.session_state.messages = []
+    st.session_state.verbose_logging = False
+
+
+# Sidebar for configuration
+with st.sidebar:
+    st.header("Configuration")
+    
+    st.markdown("""
+    **Prerequisites**: The NER Agent requires:
+    1. Approved user goal (extended for unstructured data)
+    2. Approved markdown files
+    3. Approved construction plan (from structured data phase)
+    """)
+    
+    # Approved User Goal
+    st.subheader("1. Approved User Goal")
+    kind_of_graph = st.text_input(
+        "Kind of Graph",
+        value="art collection provenance",
+        help="2-3 words describing the type of graph"
+    )
+    
+    graph_description = st.text_area(
+        "Graph Description (Extended)",
+        value="""A knowledge graph for art collection provenance which includes all levels from artworks to artists, locations, and mediums.
+
+Add artist biographies, exhibition histories, and provenance notes to provide deeper context and historical information about artworks and artists.""",
+        help="Extended description including unstructured extraction goals",
+        height=120
+    )
+    
+    approved_user_goal = {
+        "kind_of_graph": kind_of_graph,
+        "graph_description": graph_description
+    }
+    
+    st.divider()
+    
+    # Approved Files
+    st.subheader("2. Approved Files")
+    approved_files_input = st.text_area(
+        "Approved Markdown Files (one per line)",
+        value="artist_bios.md\nexhibition_histories.md\nprovenance_notes.md",
+        help="List of approved markdown files",
+        height=80
+    )
+    
+    approved_files = [f.strip() for f in approved_files_input.split("\n") if f.strip()]
+    
+    st.divider()
+    
+    # Approved Construction Plan
+    st.subheader("3. Approved Construction Plan")
+    st.markdown("Simplified version (node labels only)")
+    
+    construction_plan_input = st.text_area(
+        "Node Labels (one per line)",
+        value="Artist\nArtwork\nLocation\nMedium",
+        help="Node labels from the structured data phase",
+        height=80
+    )
+    
+    node_labels = [label.strip() for label in construction_plan_input.split("\n") if label.strip()]
+    
+    # Create a simplified construction plan
+    approved_construction_plan = {
+        label: {
+            "construction_type": "node",
+            "label": label
+        }
+        for label in node_labels
+    }
+    
+    # Validate
+    if not (kind_of_graph.strip() and graph_description.strip() and approved_files and node_labels):
+        st.warning("⚠️ All fields are required to initialize the agent.")
+    
+    # Initialize Agent button
+    if st.button("Initialize Agent", type="primary", 
+                 disabled=not (kind_of_graph.strip() and graph_description.strip() and approved_files and node_labels)):
+        with st.spinner("Initializing agent..."):
+            try:
+                initial_state = {
+                    "approved_user_goal": approved_user_goal,
+                    "approved_files": approved_files,
+                    "approved_construction_plan": approved_construction_plan
+                }
+                st.session_state.agent_caller = initialize_agent(initial_state)
+                st.success("Agent initialized successfully!")
+                st.session_state.messages = []
+            except Exception as e:
+                st.error(f"Failed to initialize agent: {e}")
+    
+    st.divider()
+    
+    # Example prompts
+    with st.expander("💡 Example Prompts"):
+        st.markdown("""
+        **Try these prompts:**
+        - `Propose entity types that could be extracted from the markdown files`
+        - `What entities appear in the artist biographies?`
+        - `Analyze the files and suggest relevant entity types`
+        - `Yes, approve these entity types` (after entities are proposed)
+        """)
+    
+    st.divider()
+    
+    # Verbose logging toggle
+    st.session_state.verbose_logging = st.checkbox(
+        "Verbose Logging",
+        value=st.session_state.verbose_logging,
+        help="Show detailed event information in terminal"
+    )
+    
+    # Reset session button
+    if st.button("Reset Session", type="secondary"):
+        reset_session()
+        st.rerun()
+
+
+# Main chat interface
+if st.session_state.agent_caller is None:
+    st.info("👈 Please configure and initialize the agent in the sidebar first.")
+    st.json({
+        "approved_user_goal": approved_user_goal,
+        "approved_files": approved_files,
+        "well_known_types": node_labels
+    })
+else:
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask the agent to propose entity types..."):
+        # Add user message
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Get agent response
+        with st.chat_message("assistant"):
+            with st.spinner("Agent is thinking..."):
+                try:
+                    async def get_response():
+                        response = await st.session_state.agent_caller.call(
+                            prompt,
+                            verbose=st.session_state.verbose_logging
+                        )
+                        return response
+                    
+                    response = asyncio.run(get_response())
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                except Exception as e:
+                    error_msg = f"Error: {e}"
+                    st.error(error_msg)
+                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+
+
+# Session State Viewer
+st.divider()
+st.header("Session State")
+
+if st.session_state.agent_caller is not None:
+    try:
+        async def get_session():
+            return await st.session_state.agent_caller.get_session()
+        
+        session = asyncio.run(get_session())
+        
+        # Display relevant state keys
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Approved User Goal")
+            if APPROVED_USER_GOAL in session.state:
+                st.json(session.state[APPROVED_USER_GOAL])
+            else:
+                st.warning("Not set")
+            
+            st.subheader("Approved Files")
+            if APPROVED_FILES in session.state:
+                st.json(session.state[APPROVED_FILES])
+            else:
+                st.warning("Not set")
+            
+            st.subheader("Well-Known Types (Node Labels)")
+            if APPROVED_CONSTRUCTION_PLAN in session.state:
+                labels = [
+                    entry["label"] 
+                    for entry in session.state[APPROVED_CONSTRUCTION_PLAN].values()
+                    if entry.get("construction_type") == "node"
+                ]
+                st.json(labels)
+            else:
+                st.warning("Not set")
+        
+        with col2:
+            st.subheader("Proposed Entity Types")
+            if PROPOSED_ENTITIES in session.state:
+                st.json(session.state[PROPOSED_ENTITIES])
+            else:
+                st.info("Not proposed yet")
+            
+            st.subheader("Approved Entity Types")
+            if APPROVED_ENTITIES in session.state:
+                st.json(session.state[APPROVED_ENTITIES])
+            else:
+                st.info("Not approved yet")
+        
+        # Full state (expandable)
+        with st.expander("View Full Session State"):
+            st.json(dict(session.state))
+    
+    except Exception as e:
+        st.error(f"Error retrieving session state: {e}")
+else:
+    st.info("Initialize the agent to view session state.")
+

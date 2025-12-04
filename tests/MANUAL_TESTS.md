@@ -455,9 +455,148 @@ streamlit run tests/ui/test_file_suggestion_unstructured_agent_ui.py
 
 ---
 
-## NER Agent
+## NER Agent (Named Entity Recognition) Manual Tests
 
-_Test cases to be added..._
+**Test UI Location**: `tests/ui/test_ner_agent_ui.py`
+
+**Prerequisites**:
+- Approved user goal (extended for unstructured data)
+- Approved markdown files from File Suggestion Agent (Unstructured)
+- Approved construction plan from Schema Proposal Agent (Structured)
+
+**Run the UI**:
+```bash
+streamlit run tests/ui/test_ner_agent_ui.py
+```
+
+---
+
+### Test 1: Initialize with Required State
+
+**Objective**: Verify that the agent correctly initializes with all required state.
+
+**Steps**:
+1. In the sidebar, configure:
+   - **Kind of Graph**: `art collection provenance`
+   - **Graph Description**: Extended goal with unstructured extraction guidance
+   - **Approved Files**: `artist_bios.md`, `exhibition_histories.md`, `provenance_notes.md`
+   - **Node Labels**: `Artist`, `Artwork`, `Location`, `Medium`
+2. Click "Initialize Agent"
+
+**Expected Result**:
+- ✅ Agent initializes successfully
+- ✅ Success message displayed
+- ✅ Session state shows all three required inputs
+
+---
+
+### Test 2: Retrieve Well-Known Types
+
+**Objective**: Verify that the agent can access well-known entity types from the construction plan.
+
+**Steps**:
+1. After initialization, prompt: `What well-known entity types are available from the graph schema?`
+2. Observe the response
+
+**Expected Result**:
+- ✅ Agent lists node labels: Artist, Artwork, Location, Medium
+- ✅ Agent explains these are from the existing graph schema
+
+---
+
+### Test 3: Sample Files to Understand Content
+
+**Objective**: Verify that the agent samples markdown files before proposing entities.
+
+**Steps**:
+1. Prompt: `Sample the artist_bios.md file to see what entities might be mentioned`
+2. Review the response
+
+**Expected Result**:
+- ✅ Agent samples the file
+- ✅ Agent describes what kind of information is in the file
+- ✅ Agent may mention potential entity types found
+
+---
+
+### Test 4: Propose Entity Types
+
+**Objective**: Verify that the agent proposes both well-known and discovered entity types.
+
+**Steps**:
+1. Prompt: `Propose entity types that could be extracted from the markdown files to support the user goal`
+2. Review the proposed entities
+
+**Expected Result**:
+- ✅ Agent proposes well-known entities (e.g., Artist, Artwork)
+- ✅ Agent proposes discovered entities (e.g., Exhibition, Art Movement, Collector)
+- ✅ Proposed entities are relevant to art provenance
+- ✅ "Proposed Entity Types" appears in session state
+- ✅ Agent explains why each entity type is relevant
+
+---
+
+### Test 5: Approve Proposed Entities
+
+**Objective**: Verify that proposed entities can be approved.
+
+**Steps**:
+1. After entities are proposed, prompt: `Yes, approve these entity types`
+2. Check the session state
+
+**Expected Result**:
+- ✅ Agent confirms approval
+- ✅ "Approved Entity Types" in session state matches proposed entities
+- ✅ Agent is ready for the next phase (fact extraction)
+
+---
+
+### Test 6: Modify Entity Proposals Based on Feedback
+
+**Objective**: Verify that the agent can adjust proposals based on user feedback.
+
+**Steps**:
+1. After initial proposal, prompt: `Remove "Art Movement" and add "Curator" instead`
+2. Review the updated proposal
+3. Approve the modified list
+
+**Expected Result**:
+- ✅ Agent removes the specified entity
+- ✅ Agent adds the requested entity
+- ✅ Agent presents the updated list
+- ✅ When approved, "Approved Entity Types" reflects the modifications
+
+---
+
+### Test 7: Validate Entity Type Relevance
+
+**Objective**: Verify that the agent only proposes entities relevant to the user goal.
+
+**Steps**:
+1. Prompt: `Make sure all proposed entities support the goal of tracking art provenance and providing historical context`
+2. Review the agent's validation
+
+**Expected Result**:
+- ✅ Agent reviews each entity type
+- ✅ Agent explains how each supports the user goal
+- ✅ Agent may remove or suggest changes to irrelevant entities
+
+---
+
+### Test 8: Test Session Reset
+
+**Objective**: Verify that resetting the session clears all state properly.
+
+**Steps**:
+1. After completing any test, click the "Reset Session" button in the sidebar
+2. Observe that the chat history is cleared
+3. Check that the session state shows all states as "Not set" or "Not proposed yet"
+4. Initialize the agent again and verify it works from a clean state
+
+**Expected Result**:
+- ✅ Session state is completely cleared
+- ✅ Chat history is empty
+- ✅ Agent can be re-initialized and used normally after reset
 
 ---
 
