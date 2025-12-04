@@ -262,63 +262,56 @@ class CheckStatusAndEscalate(BaseAgent):
     def __init__(self):
         super().__init__(name="check_status_and_escalate")
     
-    async def invoke_for_stream(
+    async def _run_async_impl(
         self,
-        invocation_context: InvocationContext
+        ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
         """Check feedback status and decide whether to continue loop."""
         
         # Get current iteration count
-        iteration = invocation_context.session_state.get("fact_refinement_iteration", 0)
+        iteration = ctx.session.state.get("fact_refinement_iteration", 0)
         iteration += 1
-        invocation_context.session_state["fact_refinement_iteration"] = iteration
+        ctx.session.state["fact_refinement_iteration"] = iteration
         
         logger.info(f"Fact refinement iteration: {iteration}/{self.MAX_ITERATIONS}")
         
         # Get critic feedback (stored via output_key="feedback")
-        feedback = invocation_context.session_state.get("feedback", "")
+        feedback = ctx.session.state.get("feedback", "")
         
         # Also check structured feedback from tool (for UI display)
-        critic_feedback = invocation_context.session_state.get("critic_feedback", {})
+        critic_feedback = ctx.session.state.get("critic_feedback", {})
         status = critic_feedback.get("status", "")
         
         # Check if feedback indicates valid (either via tool status or feedback text)
-        is_valid = (status == "valid") or ("valid" in feedback.lower() and "invalid" not in feedback.lower())
+        is_valid = (status == "valid") or ("valid" in str(feedback).lower() and "invalid" not in str(feedback).lower())
         
         if is_valid:
             # Facts are valid - exit loop
             logger.info("Fact types validated by critic - exiting refinement loop")
-            yield Event(
-                actions=EventActions(
-                    exit_agent_flow=True,
-                    agent_return_value="Fact types have been validated and are ready for user review."
-                )
-            )
+            yield Event(author=self.name, actions=EventActions(escalate=True))
         elif iteration >= self.MAX_ITERATIONS:
-            # Max iterations reached - escalate
+            # Max iterations reached - escalate with message
             issues = critic_feedback.get("issues", [])
             logger.warning(f"Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
             
             if issues:
                 issue_text = "\n".join(f"- {issue}" for issue in issues)
             else:
-                issue_text = feedback or "Unknown issues"
+                issue_text = str(feedback) or "Unknown issues"
             
-            yield Event(
-                actions=EventActions(
-                    exit_agent_flow=True,
-                    agent_return_value=(
-                        f"After {self.MAX_ITERATIONS} refinement iterations, there are still issues with the proposed fact types:\n\n" +
-                        issue_text +
-                        "\n\nPlease review the proposed facts and provide additional guidance."
-                    )
-                )
+            # Store escalation message in state for UI
+            ctx.session.state["escalation_message"] = (
+                f"After {self.MAX_ITERATIONS} refinement iterations, there are still issues:\n\n" +
+                issue_text
             )
+            
+            # Escalate to exit loop
+            yield Event(author=self.name, actions=EventActions(escalate=True))
         else:
             # Continue loop - pass feedback to proposal agent
             logger.info(f"Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
-            # Loop will continue automatically
-            yield Event()
+            # Do not escalate - loop will continue
+            yield Event(author=self.name, actions=EventActions(escalate=False))
 
 
 # ============================================================================
