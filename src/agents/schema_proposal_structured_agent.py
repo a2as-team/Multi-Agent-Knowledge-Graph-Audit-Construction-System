@@ -69,15 +69,28 @@ proposal_agent_hints = """
     identifiers found within the file.
 
     Because unique identifiers are so important for determining the structure of the graph,
-    always verify the uniqueness of suspected unique identifiers using the 'search_file' tool.
+    always verify the existence of suspected unique identifier columns using the 'search_file' tool.
+    
+    IMPORTANT: If you find duplicate values in the data, this indicates a data quality issue,
+    NOT a schema design problem. The column is still the unique identifier - duplicates will
+    be handled during data import/cleaning. Do NOT remove node constructions because of duplicate
+    data values. Focus on identifying the INTENDED unique identifier column (usually ends with _id).
+
+    IMPORTANT: User feedback takes precedence:
+    - If the user explicitly requests to remove a relationship or node (e.g., "remove X", "we don't need Y", "delete Z"), respect that request
+    - Do NOT re-propose constructions that the user has explicitly asked to remove
+    - User modifications override the "all files must be used" rule
+    - If a user says "remove X" or "we don't need Y", do not add it back in subsequent iterations
+    - Once a user requests removal, that construction should remain removed
 
     General guidance for identifying a node or a relationship:
-    - If the file name is singular and has only 1 unique identifier it is likely a node
+    - If the file name is singular and has only 1 unique identifier column (typically ending in _id), it is likely a node
     - If the file name is a combination of two things, it is likely a full relationship
     - If the file name sounds like a node, but there are multiple unique identifiers, that is likely a node with reference relationships
 
     Design rules for nodes:
-    - Nodes will have unique identifiers. 
+    - Nodes will have unique identifier columns (typically ending in _id like artist_id, artwork_id).
+    - The presence of duplicate values in the data does NOT mean the column isn't a unique identifier.
     - Nodes _may_ have identifiers that are used as reference relationships.
 
     Design rules for relationships:
@@ -99,6 +112,18 @@ proposal_agent_hints = """
 """
 
 proposal_agent_chain_of_thought_directions = """
+    AVAILABLE TOOLS (use these exact names - no other functions exist):
+    - get_approved_user_goal: Get the approved user goal from session state
+    - get_approved_files: Get the list of approved files from session state
+    - get_proposed_construction_plan: Get the current proposed construction plan
+    - sample_file: Sample rows from a file to see its structure
+    - search_file: Search for a column name or value in a file
+    - propose_node_construction: Propose a node construction (NOT "propose_construction_schema" - that doesn't exist)
+    - propose_relationship_construction: Propose a relationship construction
+    - remove_node_construction: Remove a node construction from the plan
+    - remove_relationship_construction: Remove a relationship construction from the plan
+    - approve_proposed_construction_plan: Approve the proposed construction plan
+
     Prepare for the task:
     - get the user goal using the 'get_approved_user_goal' tool
     - get the list of approved files using the 'get_approved_files' tool
@@ -106,13 +131,20 @@ proposal_agent_chain_of_thought_directions = """
 
     Think carefully, using tools to perform actions and reconsidering your actions when a tool returns an error:
     1. For each approved file, consider whether it represents a node or relationship. Check the content for potential unique identifiers using the 'sample_file' tool.
-    2. For each identifier, verify that it is unique by using the 'search_file' tool.
+    2. For each identifier column (typically ending in _id), verify that it exists using the 'search_file' tool. Note: Duplicate values in data are data quality issues, not schema problems. The column is still the unique identifier.
     3. Use the node vs relationship guidance for deciding whether the file represents a node or a relationship.
-    4. For a node file, propose a node construction using the 'propose_node_construction' tool. 
-    5. If the node contains a reference relationship, use the 'propose_relationship_construction' tool to propose a relationship construction. 
-    6. For a relationship file, propose a relationship construction using the 'propose_relationship_construction' tool
-    7. If you need to remove a construction, use the 'remove_node_construction' or 'remove_relationship_construction' tool
-    8. When you are done with construction proposals, use the 'get_proposed_construction_plan' tool to present the plan to the user
+    4. IMPORTANT: Propose ALL node and relationship constructions FIRST before removing anything. Complete the full schema proposal.
+    5. For a node file, propose a node construction using the 'propose_node_construction' tool. 
+    6. If the node contains a reference relationship, use the 'propose_relationship_construction' tool to propose a relationship construction. 
+    7. For a relationship file, propose a relationship construction using the 'propose_relationship_construction' tool
+    8. If the user explicitly requests to remove a relationship or node (e.g., "remove X", "we don't need Y", "delete Z", "remove the X relationship"), respect that request immediately using 'remove_node_construction' or 'remove_relationship_construction' tools. Do NOT re-propose constructions that the user has explicitly asked to remove.
+    9. Only after proposing the complete schema, if the critic provides feedback, use 'remove_node_construction' or 'remove_relationship_construction' tools to refine.
+    10. When you are done with construction proposals, use the 'get_proposed_construction_plan' tool to present the plan to the user
+    11. CRITICAL: Before finishing, ensure you have proposed constructions for ALL approved files, UNLESS the user has explicitly requested to remove specific constructions. User modifications take precedence over the "all files must be used" rule.
+    12. If the user explicitly approves the schema (e.g., "yes, approve", "approve the schema", "looks good", "approve", "yes approve"), use the 'approve_proposed_construction_plan' tool to finalize it.
+    13. After approval, confirm to the user that the schema has been approved and is ready for use.
+    
+    CRITICAL: Only use the exact tool names listed above. Do NOT invent function names like "propose_construction_schema" - that function does not exist.
 """
 
 # Combine all instruction components
@@ -134,12 +166,22 @@ critic_agent_role_and_goal = """
 
 critic_agent_hints = """
     Criticize the proposed schema for relevance and correctness:
-    - Are unique identifiers actually unique? Use the 'search_file' tool to validate. Composite identifiers are not acceptable.
-    - Could any nodes be relationships instead? Double-check that unique identifiers are unique and not references to other nodes. Use the 'search_file' tool to validate
-    - Can you manually trace through the source data to find the necessary information for answering a hypothetical question?
+    
+    IMPORTANT: Focus on SCHEMA DESIGN, not data quality:
+    - Duplicate values in data are DATA QUALITY ISSUES, not schema problems
+    - The presence of duplicate values does NOT invalidate a unique identifier column
+    - The column is still the correct unique identifier even if duplicates exist in the data
+    - Data quality issues will be handled during data import/cleaning, not schema design
+    
+    Schema validation criteria:
+    - Does each node have a unique identifier column (typically ending in _id)? The column name is what matters, not whether values are unique in the data.
+    - Are composite identifiers being used? (Composite identifiers are not acceptable - use single column identifiers)
+    - Could any nodes be relationships instead? Check that the unique identifier column is not actually a foreign key reference to another node.
     - Is every node in the schema connected? What relationships could be missing? Every node should connect to at least one other node.
     - Are hierarchical container relationships missing? 
     - Are any relationships redundant? A relationship between two nodes is redundant if it is semantically equivalent to or the inverse of another relationship between those two nodes.
+    - Can you manually trace through the source data to find the necessary information for answering a hypothetical question based on the user goal?
+    - Are all approved files represented in the schema? Every file should be used.
 """
 
 critic_agent_chain_of_thought_directions = """
@@ -151,9 +193,16 @@ critic_agent_chain_of_thought_directions = """
 
     Think carefully, using tools to perform actions and reconsidering your actions when a tool returns an error:
     1. Analyze each construction rule in the proposed construction plan.
-    2. Use tools to validate the construction rules for relevance and correctness.
-    3. If the schema looks good, respond with a one word reply: 'valid'.
-    4. If the schema has problems, respond with 'retry' and provide feedback as a concise bullet list of problems.
+    2. Validate the SCHEMA STRUCTURE (not data quality):
+       - Check that unique identifier columns exist (column names ending in _id)
+       - Verify that the column is intended as a unique identifier (not a foreign key)
+       - DO NOT reject schemas because of duplicate values in the data - this is a data quality issue, not a schema problem
+    3. Check schema completeness:
+       - Are all approved files represented?
+       - Is the graph connected (no isolated nodes)?
+       - Are relationships correctly identified (full vs reference)?
+    4. If the schema structure is correct and complete, respond with a one word reply: 'valid'.
+    5. If the schema has STRUCTURAL problems (not data quality issues), respond with 'retry' and provide feedback as a concise bullet list of problems.
 """
 
 # Combine all instruction components
@@ -178,7 +227,8 @@ schema_proposal_agent_tools = [
     propose_node_construction,
     propose_relationship_construction,
     remove_node_construction,
-    remove_relationship_construction
+    remove_relationship_construction,
+    approve_proposed_construction_plan
 ]
 
 # Tools for the schema critic agent (read-only, cannot make changes)

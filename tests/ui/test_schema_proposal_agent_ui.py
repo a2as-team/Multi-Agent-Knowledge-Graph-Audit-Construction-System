@@ -197,6 +197,19 @@ else:
                     response = asyncio.run(get_response())
                     st.markdown(response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
+                    
+                    # Check if approval happened and refresh session state viewer
+                    async def check_approval():
+                        session = await st.session_state.agent_caller.get_session()
+                        return APPROVED_CONSTRUCTION_PLAN in session.state
+                    
+                    # Check if this was an approval request or if approval was successful
+                    is_approval_request = "approve" in prompt.lower()
+                    approval_successful = asyncio.run(check_approval())
+                    
+                    # Force rerun to refresh session state viewer after state changes
+                    if is_approval_request or approval_successful:
+                        st.rerun()
                 except Exception as e:
                     error_msg = f"Error: {e}"
                     st.error(error_msg)
