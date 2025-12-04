@@ -310,6 +310,151 @@ I'd like an art collection provenance graph which includes all levels from artwo
 
 ---
 
+## File Suggestion Agent (Unstructured) Manual Tests
+
+**Test UI Location**: `tests/ui/test_file_suggestion_unstructured_agent_ui.py`
+
+**Prerequisites**:
+- Approved user goal from User Intent Agent (with unstructured extraction goals)
+- Markdown files available in `data/story1/`
+
+**Run the UI**:
+```bash
+streamlit run tests/ui/test_file_suggestion_unstructured_agent_ui.py
+```
+
+---
+
+### Test 1: Initialize with Extended User Goal
+
+**Objective**: Verify that the agent correctly initializes with an extended user goal that includes unstructured data extraction guidance.
+
+**Steps**:
+1. In the sidebar, set "Kind of Graph" to: `art collection provenance`
+2. In "Graph Description (Extended for Unstructured)", enter:
+   ```
+   A knowledge graph for art collection provenance which includes all levels from artworks to artists, locations, and mediums, which can support root-cause analysis and content auditing.
+   
+   Add artist biographies, exhibition histories, and provenance notes to provide deeper context and historical information about artworks and artists.
+   ```
+3. Click "Initialize Agent"
+
+**Expected Result**:
+- ✅ Agent initializes successfully
+- ✅ Success message displayed
+- ✅ "Approved User Goal" in session state shows the extended description
+
+---
+
+### Test 2: List Available Files
+
+**Objective**: Verify that the agent can list available markdown files.
+
+**Steps**:
+1. After initializing the agent, prompt: `What markdown files are available?`
+2. Observe the agent's response
+
+**Expected Result**:
+- ✅ Agent lists available `.md` files from the data directory
+- ✅ Only markdown files are shown (no CSV files)
+- ✅ Files include: `artist_bios.md`, `exhibition_histories.md`, `provenance_notes.md`, etc.
+
+---
+
+### Test 3: Suggest Relevant Files Based on Goal
+
+**Objective**: Verify that the agent suggests files relevant to the extended user goal.
+
+**Steps**:
+1. Prompt: `Which markdown files would be relevant for my goal of adding artist biographies and exhibition histories?`
+2. Review the agent's suggestions
+
+**Expected Result**:
+- ✅ Agent suggests files like `artist_bios.md`, `exhibition_histories.md`
+- ✅ Agent explains why each file is relevant to the goal
+- ✅ Files related to the extended goal (artist info, exhibitions) are prioritized
+- ✅ "Suggested Files" appears in session state
+
+---
+
+### Test 4: Sample File Content
+
+**Objective**: Verify that the agent can sample markdown files to understand their content.
+
+**Steps**:
+1. Prompt: `Can you sample the artist_bios.md file to see what it contains?`
+2. Observe the response
+
+**Expected Result**:
+- ✅ Agent samples the file and shows a preview of its content
+- ✅ Agent can describe what kind of information the file contains
+- ✅ Sample shows markdown-formatted content
+
+---
+
+### Test 5: Approve Suggested Files
+
+**Objective**: Verify that suggested files can be approved.
+
+**Steps**:
+1. After the agent suggests files, prompt: `Yes, approve these files`
+2. Check the session state
+
+**Expected Result**:
+- ✅ Agent confirms approval
+- ✅ "Approved Files" in session state matches the suggested files
+- ✅ All approved files are markdown (.md) files
+
+---
+
+### Test 6: Modify Suggestions Based on Feedback
+
+**Objective**: Verify that the agent can adjust suggestions based on user feedback.
+
+**Steps**:
+1. After initial suggestions, prompt: `Actually, I don't need misc_notes.md. Can you remove it from the suggestions?`
+2. Review the updated suggestions
+3. Approve the modified list
+
+**Expected Result**:
+- ✅ Agent removes the specified file from suggestions
+- ✅ Agent presents the updated list
+- ✅ When approved, "Approved Files" reflects the modified list
+
+---
+
+### Test 7: Test Markdown-Only Validation
+
+**Objective**: Verify that the agent only accepts markdown files for unstructured data.
+
+**Steps**:
+1. Prompt: `Suggest all available files including CSV files`
+2. Observe the agent's response
+
+**Expected Result**:
+- ✅ Agent only suggests `.md` files
+- ✅ Agent may mention that CSV files are for structured data, not unstructured extraction
+- ✅ No CSV files appear in the suggested files list
+
+---
+
+### Test 8: Test Session Reset
+
+**Objective**: Verify that resetting the session clears all state properly.
+
+**Steps**:
+1. After completing any test, click the "Reset Session" button in the sidebar
+2. Observe that the chat history is cleared
+3. Check that the session state shows all states as "Not approved yet" or "Not loaded yet"
+4. Initialize the agent again and verify it works from a clean state
+
+**Expected Result**:
+- ✅ Session state is completely cleared
+- ✅ Chat history is empty
+- ✅ Agent can be re-initialized and used normally after reset
+
+---
+
 ## NER Agent
 
 _Test cases to be added..._
