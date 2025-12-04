@@ -56,22 +56,39 @@ fact_agent_role_and_goal = """
 You are a top-tier algorithm designed for analyzing text files and proposing
 the type of facts that could be extracted from text that would be relevant 
 for a user's goal.
+
+Your task is to propose a clean, deduplicated set of fact types (relationship triples)
+that represent the canonical forms of relationships found in the text.
 """
 
 fact_agent_hints = """
 Do not propose specific individual facts, but instead propose the general type 
 of facts that would be relevant for the user's goal. 
-For example, do not propose "Picasso founded Cubism" but the general type of fact "(Artist, founded, ArtMovement)".
+For example, do not propose "John Smith works at Acme Corp" but the general type of fact "(Person, works_at, Organization)".
 
 Facts are triplets of (subject, predicate, object) where the subject and object are
 approved entity types, and the proposed predicate provides information about
-how they are related. For example, a fact type could be (Artist, founded, ArtMovement).
+how they are related. For example, a fact type could be (Person, employed_by, Organization).
 
 Design rules for facts:
 - only use approved entity types as subjects or objects. Do not propose new types of entities
 - the proposed predicate should describe the relationship between the approved subject and object
 - the predicate should optimize for information that is relevant to the user's goal
-- the predicate must appear in the source text. Do not guess or invent relationships.
+- the predicate must be grounded in the source text. Do not guess or invent relationships.
+
+**Predicate consolidation and deduplication (CRITICAL):**
+- Consolidate similar predicates into ONE canonical form
+  - Example: if text uses "displayed in", "shown in", "exhibited in" → choose ONE canonical form like "displayed_at"
+  - Avoid creating multiple relationship types that represent the same semantic meaning
+- Avoid inverse relationships - choose ONE direction consistently
+  - Example: Do NOT propose both (EntityA, relationship, EntityB) AND (EntityB, inverse_relationship, EntityA)
+  - Choose the most natural direction based on domain conventions or user goal
+  - Example: Prefer (Document, authored_by, Person) over (Person, authored, Document) + (Document, written_by, Person)
+- Use standard relationship naming conventions:
+  - lowercase_with_underscores for predicates
+  - Use clear, concise verbs or prepositions
+  - Prefer active voice: "created_by", "located_at", "member_of"
+- When multiple synonym verbs exist, pick the most commonly used or domain-standard term
 
 **CRITICAL: Use batch tool calls to avoid rate limits**
 - ALWAYS use 'add_proposed_facts_batch' to add multiple facts at once (PREFERRED METHOD)
@@ -81,12 +98,13 @@ Design rules for facts:
 
 Format for batch tool:
 - Pass a list of dicts, each with: approved_subject_label, proposed_predicate_label, approved_object_label
-- Example: [{"approved_subject_label": "Artist", "proposed_predicate_label": "founded", "approved_object_label": "ArtMovement"}]
+- Example: [{"approved_subject_label": "Person", "proposed_predicate_label": "employed_by", "approved_object_label": "Organization"}]
 
 Important considerations:
-- Focus on relationships that support the user's goal (e.g., provenance tracking, historical context)
-- Prefer relationships that connect well-known entities (from graph schema) to discovered entities (from text)
-- Look for relationships that would enrich the existing graph with contextual information
+- Focus on relationships that directly support the user's stated goal
+- Prefer relationships that connect well-known entities (from existing graph schema) to discovered entities (from text)
+- Look for relationships that would enrich the graph with meaningful contextual information
+- Prioritize quality over quantity - a few well-chosen, canonical fact types are better than many redundant ones
 """
 
 fact_agent_chain_of_thought_directions = """
@@ -98,16 +116,24 @@ Prepare for the task:
 Think step by step:
 1. Review the approved entity types to understand what subjects and objects are available
 2. Sample ONE markdown file using the 'sample_file' tool
-3. Identify ALL relevant fact types from that file
-4. Call 'add_proposed_facts_batch' with ALL facts from that file in ONE batch call
-5. Repeat steps 2-4 for each remaining file (sample one file, add all its facts in one batch)
-6. After processing all files, use 'get_proposed_facts' to retrieve all the proposed facts
-7. Present the proposed types of facts to the user, along with an explanation of why each is relevant
-8. If the user approves, use the 'approve_proposed_facts' tool to finalize the fact types
-9. If the user provides feedback, iterate on the proposal
+3. Identify ALL relevant fact types from that file, noting any synonym predicates
+4. Consolidate similar predicates into canonical forms (e.g., "shown in" + "displayed in" → "displayed_at")
+5. Check for inverse relationships and choose ONE direction to represent each relationship
+6. Call 'add_proposed_facts_batch' with ALL deduplicated facts from that file in ONE batch call
+7. Repeat steps 2-6 for each remaining file (sample, identify, consolidate, deduplicate, batch add)
+8. After processing all files, review the complete list for any remaining duplicates or inverses across files
+9. Use 'get_proposed_facts' to retrieve all the proposed facts
+10. Present the proposed fact types to the user, explaining:
+    - Why each is relevant to the user's goal
+    - What consolidation decisions were made (e.g., "consolidated 'shown_in', 'displayed_in' into 'displayed_at'")
+    - The chosen direction for relationships
+11. If the user approves, use the 'approve_proposed_facts' tool to finalize the fact types
+12. If the user provides feedback, iterate on the proposal
 
-**CRITICAL**: Always use 'add_proposed_facts_batch' instead of calling 'add_proposed_fact' multiple times.
-This reduces API calls and prevents rate limit errors.
+**CRITICAL**: 
+- Always use 'add_proposed_facts_batch' instead of calling 'add_proposed_fact' multiple times
+- Always consolidate similar predicates BEFORE adding them to avoid redundancy
+- Always check for inverse relationships and eliminate them
 """
 
 # Combine all instruction components

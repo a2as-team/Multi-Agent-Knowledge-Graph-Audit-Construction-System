@@ -652,14 +652,18 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 - ✅ Agent proposes fact types as (subject, predicate, object) triples
 - ✅ Examples: `(Artwork, displayed_at, Exhibition)`, `(Artist, founded, ArtMovement)`, `(Artwork, owned_by, Collection)`
 - ✅ All subjects and objects are from the approved entity types
-- ✅ Predicates appear in the source text (not invented)
+- ✅ Predicates are grounded in the source text (not invented)
+- ✅ **No redundant predicates** - similar verbs are consolidated (e.g., "shown in", "displayed in" → single "displayed_at")
+- ✅ **No inverse relationships** - only ONE direction per relationship type (e.g., not both "created" and "created_by")
+- ✅ Agent explains consolidation decisions (e.g., "consolidated 'exhibited_in', 'shown_in' into 'displayed_at'")
 - ✅ "Proposed Fact Types" appears in session state
 - ✅ Agent explains why each fact type is relevant
 - ✅ No rate limit errors (or significantly fewer retries)
 
 **Performance Check**:
 - Expected API calls: ~6-9 total (3 files × 2-3 calls per file)
-- Previous behavior: 20+ API calls (causing rate limits)
+- Expected fact types: 5-10 unique, canonical relationship types (not 15+ redundant ones)
+- Previous behavior: 20+ API calls + redundant facts (causing rate limits and messy output)
 
 ---
 
