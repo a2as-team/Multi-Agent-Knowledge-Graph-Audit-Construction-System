@@ -368,24 +368,13 @@ check_status_and_escalate = CheckStatusAndEscalate()
 # Refinement Loop
 fact_refinement_loop = LoopAgent(
     name="fact_refinement_loop",
-    agents=[
+    description="Analyzes markdown files to propose fact types based on user intent and feedback",
+    max_iterations=3,  # Allow up to 3 iterations for refinement
+    sub_agents=[
         fact_proposal_agent,
         fact_critic_agent,
         check_status_and_escalate
-    ],
-    instruction="""
-    You coordinate the fact extraction refinement process.
-    
-    Workflow:
-    1. Proposal Agent proposes fact types from markdown files
-    2. Critic Agent validates the proposal and provides feedback
-    3. CheckStatusAndEscalate checks the feedback:
-       - If "valid": exit loop, present to user
-       - If "retry" and under max iterations: continue loop with feedback
-       - If max iterations reached: escalate to user
-    
-    The loop continues until fact types are validated or max iterations reached.
-    """
+    ]
 )
 
 logger.info("Created fact extraction agents with critic pattern: fact_refinement_loop")
