@@ -61,10 +61,8 @@ for a user's goal.
 Your task is to propose a clean, deduplicated set of fact types (relationship triples)
 that represent relationships found in the text.
 
-Consider feedback if it is available:
-<feedback>
-{feedback}
-</feedback>
+If this is a refinement iteration, check the critic feedback in session state 
+and address any issues that were identified.
 """
 
 fact_proposal_agent_hints = """
@@ -277,12 +275,18 @@ class CheckStatusAndEscalate(BaseAgent):
         
         logger.info(f"Fact refinement iteration: {iteration}/{self.MAX_ITERATIONS}")
         
-        # Get critic feedback
+        # Get critic feedback (stored via output_key="feedback")
+        feedback = invocation_context.session_state.get("feedback", "")
+        
+        # Also check structured feedback from tool (for UI display)
         critic_feedback = invocation_context.session_state.get("critic_feedback", {})
         status = critic_feedback.get("status", "")
         
-        if status == "valid":
-            # Schema is valid - exit loop
+        # Check if feedback indicates valid (either via tool status or feedback text)
+        is_valid = (status == "valid") or ("valid" in feedback.lower() and "invalid" not in feedback.lower())
+        
+        if is_valid:
+            # Facts are valid - exit loop
             logger.info("Fact types validated by critic - exiting refinement loop")
             yield Event(
                 actions=EventActions(
@@ -290,29 +294,30 @@ class CheckStatusAndEscalate(BaseAgent):
                     agent_return_value="Fact types have been validated and are ready for user review."
                 )
             )
-        elif status == "retry":
-            if iteration >= self.MAX_ITERATIONS:
-                # Max iterations reached - escalate
-                issues = critic_feedback.get("issues", [])
-                logger.warning(f"Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
-                yield Event(
-                    actions=EventActions(
-                        exit_agent_flow=True,
-                        agent_return_value=(
-                            f"After {self.MAX_ITERATIONS} refinement iterations, there are still issues with the proposed fact types:\n\n" +
-                            "\n".join(f"- {issue}" for issue in issues) +
-                            "\n\nPlease review the proposed facts and provide additional guidance."
-                        )
+        elif iteration >= self.MAX_ITERATIONS:
+            # Max iterations reached - escalate
+            issues = critic_feedback.get("issues", [])
+            logger.warning(f"Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
+            
+            if issues:
+                issue_text = "\n".join(f"- {issue}" for issue in issues)
+            else:
+                issue_text = feedback or "Unknown issues"
+            
+            yield Event(
+                actions=EventActions(
+                    exit_agent_flow=True,
+                    agent_return_value=(
+                        f"After {self.MAX_ITERATIONS} refinement iterations, there are still issues with the proposed fact types:\n\n" +
+                        issue_text +
+                        "\n\nPlease review the proposed facts and provide additional guidance."
                     )
                 )
-            else:
-                # Continue loop - pass feedback to proposal agent
-                logger.info(f"Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
-                # Loop will continue automatically
-                yield Event()
+            )
         else:
-            # No feedback yet or unexpected status - continue
-            logger.warning(f"Unexpected critic feedback status: {status}")
+            # Continue loop - pass feedback to proposal agent
+            logger.info(f"Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
+            # Loop will continue automatically
             yield Event()
 
 
@@ -360,6 +365,7 @@ fact_critic_agent = LlmAgent(
     description="Validates proposed fact types and provides structured feedback.",
     instruction=fact_critic_agent_instruction,
     tools=fact_critic_agent_tools,
+    output_key="feedback"  # The result of calling the critic is placed in the 'feedback' key
 )
 
 # Check Status Agent
