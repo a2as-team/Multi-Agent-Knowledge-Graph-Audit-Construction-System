@@ -27,6 +27,7 @@ from src.tools.fact_extraction_tools import (
     get_well_known_relationships,
     add_proposed_fact,
     add_proposed_facts_batch,
+    remove_proposed_fact,
     get_proposed_facts,
     set_critic_feedback,
     get_critic_feedback,
@@ -105,6 +106,7 @@ Design rules for facts:
 - This reduces API calls by 70-80% and prevents rate limit errors
 - After sampling each file, add ALL facts from that file in a single batch call
 - Only use 'add_proposed_fact' if you need to add a single fact later
+- Use 'remove_proposed_fact' to remove specific facts when addressing critic feedback
 
 Format for batch tool:
 - Pass a list of dicts, each with: approved_subject_label, proposed_predicate_label, approved_object_label
@@ -129,6 +131,8 @@ Think step by step:
 1. Review the approved entity types to understand what subjects and objects are available
 2. Review the existing relationships from structured data to know what to AVOID proposing
 3. If feedback is provided, read it carefully and address all issues
+   - Use 'remove_proposed_fact' to remove problematic facts identified by the critic
+   - Then re-propose corrected versions using 'add_proposed_facts_batch'
 4. Sample ONE markdown file using the 'sample_file' tool
 5. Identify ALL relevant fact types from that file, noting any synonym predicates
 6. Filter out any facts that duplicate or overlap with existing relationships from structured data
@@ -326,6 +330,7 @@ fact_proposal_agent_tools = [
     sample_file,
     add_proposed_fact,
     add_proposed_facts_batch,
+    remove_proposed_fact,
     get_proposed_facts
 ]
 

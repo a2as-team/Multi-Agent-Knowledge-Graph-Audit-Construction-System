@@ -220,6 +220,58 @@ def add_proposed_facts_batch(
     })
 
 
+def remove_proposed_fact(
+    proposed_predicate_label: str,
+    tool_context: ToolContext
+) -> Dict[str, Any]:
+    """
+    Remove a specific proposed fact type by its predicate label.
+    
+    Use this when the critic identifies a fact that should be removed
+    (e.g., duplicates, inverse relationships, semantic redundancy).
+    
+    Args:
+        proposed_predicate_label: The predicate label (key) of the fact to remove
+        tool_context: ADK ToolContext containing state and other context
+    
+    Returns:
+        Dictionary with status and remaining proposed_facts or error message.
+    
+    Example:
+        remove_proposed_fact("owns", tool_context)
+        # Removes the fact with predicate "owns"
+    """
+    current_facts = tool_context.state.get(PROPOSED_FACTS, {})
+    
+    if not current_facts:
+        return tool_error(
+            "No proposed facts exist. Nothing to remove."
+        )
+    
+    if proposed_predicate_label not in current_facts:
+        available_predicates = list(current_facts.keys())
+        return tool_error(
+            f"Fact with predicate '{proposed_predicate_label}' not found. "
+            f"Available predicates: {available_predicates}"
+        )
+    
+    # Remove the fact
+    removed_fact = current_facts.pop(proposed_predicate_label)
+    tool_context.state[PROPOSED_FACTS] = current_facts
+    
+    logger.info(
+        f"Removed proposed fact: ({removed_fact['subject_label']}, "
+        f"{removed_fact['predicate_label']}, {removed_fact['object_label']})"
+    )
+    
+    return tool_success(PROPOSED_FACTS, {
+        "message": f"Successfully removed fact '{proposed_predicate_label}'. "
+                   f"Remaining facts: {len(current_facts)}",
+        "removed_fact": removed_fact,
+        "remaining_facts": current_facts
+    })
+
+
 def get_proposed_facts(tool_context: ToolContext) -> Dict[str, Any]:
     """
     Get the proposed types of facts that could be extracted from the markdown files.
