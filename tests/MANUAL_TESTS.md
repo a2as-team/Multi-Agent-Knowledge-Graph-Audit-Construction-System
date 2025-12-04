@@ -600,9 +600,191 @@ streamlit run tests/ui/test_ner_agent_ui.py
 
 ---
 
-## Fact Extraction Agent
+## Fact Extraction Agent Manual Tests
 
-_Test cases to be added..._
+**Test UI Location**: `tests/ui/test_fact_extraction_agent_ui.py`
+
+**Prerequisites**:
+- Approved user goal (extended for unstructured data)
+- Approved markdown files
+- **Approved entity types** (from NER Agent)
+
+**Run the UI**:
+```bash
+streamlit run tests/ui/test_fact_extraction_agent_ui.py
+```
+
+---
+
+### Test 1: Initialize with Approved Entity Types
+
+**Objective**: Verify that the agent correctly initializes with approved entity types from the NER Agent.
+
+**Steps**:
+1. In the sidebar, configure:
+   - **User Goal**: Extended goal with unstructured extraction guidance
+   - **Approved Files**: `artist_bios.md`, `exhibition_histories.md`, `provenance_notes.md`
+   - **Approved Entity Types**: `Artist`, `Artwork`, `Location`, `Exhibition`, `Collection`, `ArtMovement`, `Collector`, `Institution`
+2. Click "Initialize Agent"
+
+**Expected Result**:
+- ✅ Agent initializes successfully
+- ✅ Success message displayed
+- ✅ Session state shows all three required inputs
+- ✅ Approved entity types are available to the agent
+
+---
+
+### Test 2: Propose Fact Types
+
+**Objective**: Verify that the agent proposes relevant fact types (relationship triples).
+
+**Steps**:
+1. Prompt: `Propose fact types that could be extracted from the markdown files`
+2. Review the proposed facts
+
+**Expected Result**:
+- ✅ Agent proposes fact types as (subject, predicate, object) triples
+- ✅ Examples: `(Artwork, displayed_at, Exhibition)`, `(Artist, founded, ArtMovement)`, `(Artwork, owned_by, Collection)`
+- ✅ All subjects and objects are from the approved entity types
+- ✅ Predicates appear in the source text (not invented)
+- ✅ "Proposed Fact Types" appears in session state
+- ✅ Agent explains why each fact type is relevant
+
+---
+
+### Test 3: Validate Entity Type Usage
+
+**Objective**: Verify that the agent only uses approved entity types.
+
+**Steps**:
+1. After initial proposal, prompt: `Make sure all fact types only use approved entity types`
+2. Review the agent's validation
+
+**Expected Result**:
+- ✅ Agent confirms all subjects/objects are from approved entities
+- ✅ Agent does not propose new entity types
+- ✅ If any invalid entities were used, agent corrects them
+
+---
+
+### Test 4: Sample Files for Context
+
+**Objective**: Verify that the agent samples files to understand relationships.
+
+**Steps**:
+1. Prompt: `Sample the exhibition_histories.md file to see what relationships exist`
+2. Observe the response
+
+**Expected Result**:
+- ✅ Agent samples the file
+- ✅ Agent identifies relationship phrases (e.g., "exhibited in", "featured in", "displayed in")
+- ✅ Agent proposes fact types based on observed relationships
+
+---
+
+### Test 5: Approve Proposed Facts
+
+**Objective**: Verify that proposed facts can be approved.
+
+**Steps**:
+1. After facts are proposed, prompt: `Yes, approve these fact types`
+2. Check the session state
+
+**Expected Result**:
+- ✅ Agent confirms approval
+- ✅ "Approved Fact Types" in session state matches proposed facts
+- ✅ All fact types are valid triples with approved entities
+
+---
+
+### Test 6: Modify Fact Proposals Based on Feedback
+
+**Objective**: Verify that the agent can adjust proposals based on user feedback.
+
+**Steps**:
+1. After initial proposal, prompt: `Remove the (Artist, born_in, Location) fact and add (Artwork, loaned_to, Institution) instead`
+2. Review the updated proposal
+3. Approve the modified list
+
+**Expected Result**:
+- ✅ Agent removes the specified fact
+- ✅ Agent adds the requested fact
+- ✅ Agent presents the updated list
+- ✅ When approved, "Approved Fact Types" reflects the modifications
+
+---
+
+### Test 7: Validate Predicate Relevance
+
+**Objective**: Verify that predicates are grounded in the text.
+
+**Steps**:
+1. Prompt: `Ensure all predicates actually appear in the markdown files`
+2. Review the agent's validation
+
+**Expected Result**:
+- ✅ Agent verifies each predicate against the text
+- ✅ Agent may sample files to confirm predicate usage
+- ✅ Agent removes or modifies predicates that aren't found in text
+
+---
+
+### Test 8: Test Goal Alignment
+
+**Objective**: Verify that fact types support the user's goal.
+
+**Steps**:
+1. Prompt: `Do these fact types support the goal of tracking art provenance and providing historical context?`
+2. Review the agent's analysis
+
+**Expected Result**:
+- ✅ Agent evaluates each fact type against the user goal
+- ✅ Agent explains how facts support provenance tracking
+- ✅ Agent may suggest additional facts or remove irrelevant ones
+
+---
+
+### Test 9: Test Session Reset
+
+**Objective**: Verify that resetting the session clears all state properly.
+
+**Steps**:
+1. After completing any test, click the "Reset Session" button in the sidebar
+2. Observe that the chat history is cleared
+3. Check that the session state shows all states as "Not set" or "Not proposed yet"
+4. Initialize the agent again and verify it works from a clean state
+
+**Expected Result**:
+- ✅ Session state is completely cleared
+- ✅ Chat history is empty
+- ✅ Agent can be re-initialized and used normally after reset
+
+---
+
+### Expected Fact Types for Art Collection
+
+Based on the test data, the agent should propose fact types like:
+
+**Provenance & Ownership:**
+- `(Artwork, owned_by, Collection)`
+- `(Artwork, owned_by, Collector)`
+- `(Collection, held_by, Institution)`
+- `(Artwork, loaned_to, Institution)`
+
+**Exhibition & Display:**
+- `(Artwork, displayed_at, Exhibition)`
+- `(Artwork, exhibited_in, Location)` (if Location is a gallery space)
+- `(Exhibition, featured, Artwork)`
+
+**Artistic Context:**
+- `(Artist, founded, ArtMovement)`
+- `(Artist, associated_with, ArtMovement)`
+- `(Artwork, belongs_to, ArtMovement)`
+
+**Historical Connections:**
+- `(Artist, created, Artwork)` (may already exist in structured data)
+- `(Exhibition, showcased, Artwork)`
 
 ---
 
