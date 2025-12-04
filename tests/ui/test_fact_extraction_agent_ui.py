@@ -1,11 +1,17 @@
 """
-Streamlit UI for testing the Fact Extraction Agent.
+Streamlit UI for testing the Fact Extraction Agent (with Critic Pattern).
 
 This UI allows interactive testing of the Fact Extraction Agent with:
 - Chat interface for user interaction
+- Critic pattern with automatic refinement (up to 3 iterations)
 - Session state viewer
 - Verbose logging toggle
 - Reset session functionality
+
+The agent uses a critic pattern:
+1. Proposal Agent proposes fact types
+2. Critic Agent validates and provides feedback
+3. Refinement loop iterates until valid (max 3 iterations)
 """
 import streamlit as st
 import asyncio
@@ -216,19 +222,36 @@ HAS_MEDIUM | Artwork | Medium""",
     st.divider()
     
     # Example prompts
-    with st.expander("💡 Example Prompts"):
+    with st.expander("💡 Example Prompts & Info"):
         st.markdown("""
+        **How it works:**
+        The agent uses a critic pattern with automatic refinement:
+        1. Proposal Agent proposes fact types from markdown files
+        2. Critic Agent validates and checks for issues (duplicates, inverses, synonyms, redundancy)
+        3. If issues found, loop iterates with feedback (max 3 times)
+        4. If valid or max iterations reached, presents to you
+        
         **Try these prompts:**
         - `Propose fact types that could be extracted from the markdown files`
         - `What relationships exist between these entity types in the text?`
         - `Analyze the files and suggest relevant fact types`
-        - `Yes, approve these fact types` (after facts are proposed)
+        
+        **After automatic refinement:**
+        - Review the proposed facts and critic feedback (if any)
+        - `Yes, approve these fact types` (if you're satisfied)
+        - Or provide additional feedback for manual refinement
         
         **Example Fact Types:**
         - (Artwork, displayed_at, Exhibition)
         - (Artist, founded, ArtMovement)
         - (Artwork, owned_by, Collection)
         - (Collection, held_by, Institution)
+        
+        **Note:** The critic automatically checks for:
+        - ✓ No duplicates across files
+        - ✓ No inverse relationships
+        - ✓ No synonym predicates
+        - ✓ No redundancy with existing structured relationships
         """)
     
     st.divider()
@@ -357,6 +380,28 @@ if st.session_state.agent_caller is not None:
                     st.json(facts)
             else:
                 st.info("Not approved yet")
+        
+        # Critic feedback section (if available)
+        if "critic_feedback" in session.state:
+            st.divider()
+            st.subheader("🔍 Critic Feedback")
+            feedback = session.state["critic_feedback"]
+            status = feedback.get("status", "unknown")
+            
+            if status == "valid":
+                st.success("✓ Critic validated all fact types")
+            elif status == "retry":
+                st.warning("⚠ Critic requested refinement")
+                issues = feedback.get("issues", [])
+                if issues:
+                    st.markdown("**Issues found:**")
+                    for issue in issues:
+                        st.markdown(f"- {issue}")
+            
+            # Show iteration count
+            iteration = session.state.get("fact_refinement_iteration", 0)
+            if iteration > 0:
+                st.caption(f"Refinement iterations: {iteration}/3")
         
         # Full state (expandable)
         with st.expander("View Full Session State"):

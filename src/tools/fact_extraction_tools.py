@@ -234,6 +234,52 @@ def get_proposed_facts(tool_context: ToolContext) -> Dict[str, Any]:
     return tool_success(PROPOSED_FACTS, proposed_facts)
 
 
+def set_critic_feedback(
+    status: str,
+    message: str,
+    issues: List[str],
+    tool_context: ToolContext
+) -> Dict[str, Any]:
+    """
+    Sets the critic's structured feedback on the proposed fact types.
+    
+    Called by the Fact Critic Agent after reviewing the proposed facts.
+    
+    Args:
+        status: Either "valid" (facts are good) or "retry" (need refinement)
+        message: Summary message from the critic
+        issues: List of specific issues found (empty if status is "valid")
+        tool_context: ADK ToolContext containing state and other context
+    
+    Returns:
+        Dictionary with status and critic_feedback.
+    """
+    feedback = {
+        "status": status,
+        "message": message,
+        "issues": issues if status == "retry" else []
+    }
+    tool_context.state["critic_feedback"] = feedback
+    logger.info(f"Critic feedback set: {status} - {message}")
+    if issues:
+        logger.info(f"Issues found: {issues}")
+    return tool_success("critic_feedback", feedback)
+
+
+def get_critic_feedback(tool_context: ToolContext) -> Dict[str, Any]:
+    """
+    Gets the critic's feedback on the proposed fact types.
+    
+    Args:
+        tool_context: ADK ToolContext containing state and other context
+    
+    Returns:
+        Dictionary with status and critic_feedback (may be empty dict if not set yet).
+    """
+    feedback = tool_context.state.get("critic_feedback", {})
+    return tool_success("critic_feedback", feedback)
+
+
 def approve_proposed_facts(tool_context: ToolContext) -> Dict[str, Any]:
     """
     Upon user approval, records the proposed fact types as approved fact types.

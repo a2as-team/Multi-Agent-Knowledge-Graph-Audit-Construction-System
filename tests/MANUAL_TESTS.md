@@ -600,9 +600,14 @@ streamlit run tests/ui/test_ner_agent_ui.py
 
 ---
 
-## Fact Extraction Agent Manual Tests
+## Fact Extraction Agent Manual Tests (with Critic Pattern)
 
 **Test UI Location**: `tests/ui/test_fact_extraction_agent_ui.py`
+
+**Architecture**: This agent uses a **critic pattern** with automatic refinement:
+- **Proposal Agent**: Proposes fact types from markdown files
+- **Critic Agent**: Validates proposals and provides structured feedback
+- **Refinement Loop**: Iterates up to 3 times until fact types are valid
 
 **Prerequisites**:
 - Approved user goal (extended for unstructured data)
@@ -643,68 +648,83 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 2: Avoid Redundancy with Existing Relationships
+### Test 2: Critic Pattern - Automatic Refinement
 
-**Objective**: Verify that the agent does NOT propose fact types that duplicate existing relationships from structured data.
+**Objective**: Verify that the critic pattern automatically refines fact types through iterations.
 
 **Steps**:
 1. Ensure Test 1 is complete (construction plan is initialized)
 2. Prompt: `Propose fact types that could be extracted from the markdown files`
-3. Review the proposed facts
-4. Check that agent used `get_well_known_relationships` tool
-5. Verify NO duplicates with existing relationships
+3. **Observe the refinement process** (check logs and session state):
+   - Proposal Agent proposes initial fact types
+   - Critic Agent reviews and may request retry
+   - Loop continues automatically until valid or max iterations (3)
+4. Review the final proposed facts and critic feedback
 
 **Expected Result**:
-- ✅ Agent calls `get_well_known_relationships` at the start
-- ✅ Agent identifies existing relationships: `CREATED_BY`, `LOCATED_AT`, `HAS_MEDIUM`
-- ✅ Agent does NOT propose these fact types:
-  - ❌ `(Artist, created, Artwork)` ← inverse of CREATED_BY
-  - ❌ `(Artwork, created_by, Artist)` ← duplicate of CREATED_BY
-  - ❌ `(Artwork, made_by, Artist)` ← synonym of CREATED_BY
-  - ❌ `(Artwork, located_at, Location)` ← duplicate of LOCATED_AT
-  - ❌ `(Artwork, has_medium, Medium)` ← duplicate of HAS_MEDIUM
-- ✅ Agent ONLY proposes NEW relationships from unstructured text:
-  - ✅ `(Artist, born_in, Location)` ← NEW info from bios
-  - ✅ `(Artist, founded, ArtMovement)` ← NEW info from bios
-  - ✅ `(Artwork, exhibited_at, Exhibition)` ← NEW info from exhibition histories
-  - ✅ `(Artwork, owned_by, Collector)` ← NEW info from provenance
-- ✅ Agent explains which existing relationships were avoided
+- ✅ **Iteration 1**: Proposal Agent proposes facts, Critic validates
+- ✅ **If critic finds issues**: 
+  - Critic feedback appears in session state with status="retry"
+  - Issues are listed (e.g., "Duplicate: ...", "Inverse relationship: ...", "Synonym predicates: ...")
+  - Loop automatically continues to Iteration 2
+- ✅ **Subsequent iterations**: Proposal Agent addresses feedback
+- ✅ **Final iteration**: 
+  - Critic validates with status="valid" OR
+  - Max iterations (3) reached and user is notified
+- ✅ **Critic feedback section** in UI shows:
+  - Current status (valid/retry)
+  - List of issues (if any)
+  - Iteration count (X/3)
+- ✅ **Final proposed facts** are clean:
+  - No duplicates across files
+  - No inverse relationships
+  - No synonym predicates
+  - No redundancy with structured data
 
 **Performance Check**:
-- Without construction plan: 8-12 fact types (including 3 redundant ones)
-- With construction plan: 5-9 fact types (NO redundancy with structured data)
+- Expected iterations: 1-3 (depending on initial proposal quality)
+- Expected final fact types: 10-15 unique, non-redundant relationships
+- Previous (without critic): 21+ fact types with redundancy issues
 
 ---
 
-### Test 3: Propose Fact Types (with Batch Tool)
+### Test 3: Verify Critic Validation Checks
 
-**Objective**: Verify that the agent proposes relevant fact types using the batch tool to reduce API calls.
+**Objective**: Verify that the critic agent properly validates all aspects of proposed fact types.
 
 **Steps**:
-1. Prompt: `Propose fact types that could be extracted from the markdown files`
-2. Review the proposed facts
-3. Check the logs for `add_proposed_facts_batch` tool usage
+1. After Test 2 completes, review the critic feedback in session state
+2. Check that critic validated these aspects:
+   - No duplicate fact types
+   - No inverse relationships
+   - No synonym predicates
+   - No semantic redundancy with existing relationships
+   - All entities are approved
+   - Predicates are consolidated
+   - Facts support user goal
 
 **Expected Result**:
-- ✅ Agent uses `add_proposed_facts_batch` (NOT multiple `add_proposed_fact` calls)
-- ✅ Agent samples files one at a time
-- ✅ After each file sample, agent adds ALL facts from that file in ONE batch call
+- ✅ Critic feedback shows status="valid" (or lists specific issues if status="retry")
+- ✅ If issues were found in earlier iterations, they are resolved in final proposal
+- ✅ Final proposed facts pass ALL validation checks:
+  - ✅ No exact duplicates (same subject, predicate, object)
+  - ✅ No inverse pairs (e.g., NOT both `acquired_by` and `acquired_from`)
+  - ✅ No synonyms (e.g., NOT both `featured_art_movement` and `focused_on`)
+  - ✅ No semantic overlap with existing CREATED_BY, LOCATED_AT, HAS_MEDIUM
+  - ✅ All entities are from approved list
+  - ✅ Predicates use lowercase_with_underscores format
+- ✅ Batch tool usage (check logs): `add_proposed_facts_batch` used for efficiency
 - ✅ Total API calls reduced by 70-80% compared to individual calls
-- ✅ Agent proposes fact types as (subject, predicate, object) triples
-- ✅ All subjects and objects are from the approved entity types
-- ✅ Predicates are grounded in the source text (not invented)
-- ✅ **No redundant predicates** - similar verbs are consolidated (e.g., "shown in", "displayed in" → single "displayed_at")
-- ✅ **No inverse relationships** - only ONE direction per relationship type (e.g., not both "created" and "created_by")
-- ✅ **No duplicates with structured data** - agent avoided proposing existing relationships
-- ✅ Agent explains consolidation decisions (e.g., "consolidated 'exhibited_in', 'shown_in' into 'displayed_at'")
-- ✅ "Proposed Fact Types" appears in session state
-- ✅ Agent explains why each fact type is relevant
-- ✅ No rate limit errors (or significantly fewer retries)
+
+**Critic Validation Quality Check**:
+- ✅ Specific, actionable feedback (not vague)
+- ✅ Lists exact fact types that have issues
+- ✅ Explains why each issue is problematic
+- ✅ Suggests how to fix the issues
 
 **Performance Check**:
-- Expected API calls: ~8-12 total (1 for get_well_known_relationships + 3 files × 2-3 calls per file)
-- Expected fact types: 5-9 unique, canonical, NON-REDUNDANT relationship types
-- Previous behavior: 20+ API calls + 12+ redundant facts (causing rate limits and messy output)
+- Expected fact types: 10-15 unique, canonical, NON-REDUNDANT relationship types
+- Previous (without critic): 21+ fact types with redundancy issues
 
 ---
 
