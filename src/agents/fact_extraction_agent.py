@@ -258,9 +258,11 @@ class CheckStatusAndEscalate(BaseAgent):
     - If max iterations reached: escalates to user
     """
     
+    # Class variable for max iterations
+    MAX_ITERATIONS = 3
+    
     def __init__(self):
         super().__init__(name="check_status_and_escalate")
-        self.max_iterations = 3
     
     async def invoke_for_stream(
         self,
@@ -273,7 +275,7 @@ class CheckStatusAndEscalate(BaseAgent):
         iteration += 1
         invocation_context.session_state["fact_refinement_iteration"] = iteration
         
-        logger.info(f"Fact refinement iteration: {iteration}/{self.max_iterations}")
+        logger.info(f"Fact refinement iteration: {iteration}/{self.MAX_ITERATIONS}")
         
         # Get critic feedback
         critic_feedback = invocation_context.session_state.get("critic_feedback", {})
@@ -289,15 +291,15 @@ class CheckStatusAndEscalate(BaseAgent):
                 )
             )
         elif status == "retry":
-            if iteration >= self.max_iterations:
+            if iteration >= self.MAX_ITERATIONS:
                 # Max iterations reached - escalate
                 issues = critic_feedback.get("issues", [])
-                logger.warning(f"Max iterations ({self.max_iterations}) reached - escalating to user")
+                logger.warning(f"Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
                 yield Event(
                     actions=EventActions(
                         exit_agent_flow=True,
                         agent_return_value=(
-                            f"After {self.max_iterations} refinement iterations, there are still issues with the proposed fact types:\n\n" +
+                            f"After {self.MAX_ITERATIONS} refinement iterations, there are still issues with the proposed fact types:\n\n" +
                             "\n".join(f"- {issue}" for issue in issues) +
                             "\n\nPlease review the proposed facts and provide additional guidance."
                         )
@@ -305,7 +307,7 @@ class CheckStatusAndEscalate(BaseAgent):
                 )
             else:
                 # Continue loop - pass feedback to proposal agent
-                logger.info(f"Critic requested retry (iteration {iteration}/{self.max_iterations})")
+                logger.info(f"Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
                 # Loop will continue automatically
                 yield Event()
         else:
