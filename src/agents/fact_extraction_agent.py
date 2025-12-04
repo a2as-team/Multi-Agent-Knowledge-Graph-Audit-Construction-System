@@ -10,7 +10,7 @@ The agents work in a refinement loop until fact types are approved.
 """
 import warnings
 import logging
-from typing import Dict, Any, AsyncGenerator
+from typing import Dict, Any, AsyncGenerator, ClassVar
 
 from google.adk.agents import Agent, LlmAgent, LoopAgent, BaseAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -258,8 +258,8 @@ class CheckStatusAndEscalate(BaseAgent):
     - If max iterations reached: escalates to user
     """
     
-    # Class variable for max iterations
-    MAX_ITERATIONS = 3
+    # Class variable for max iterations (ClassVar to avoid Pydantic field validation)
+    MAX_ITERATIONS: ClassVar[int] = 3
     
     def __init__(self):
         super().__init__(name="check_status_and_escalate")
