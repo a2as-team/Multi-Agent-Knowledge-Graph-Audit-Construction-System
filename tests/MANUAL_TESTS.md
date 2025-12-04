@@ -608,6 +608,7 @@ streamlit run tests/ui/test_ner_agent_ui.py
 - Approved user goal (extended for unstructured data)
 - Approved markdown files
 - **Approved entity types** (from NER Agent)
+- **Approved construction plan** (from structured data phase - optional but recommended to avoid redundancy)
 
 **Run the UI**:
 ```bash
@@ -616,26 +617,66 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 1: Initialize with Approved Entity Types
+### Test 1: Initialize with Construction Plan to Avoid Redundancy
 
-**Objective**: Verify that the agent correctly initializes with approved entity types from the NER Agent.
+**Objective**: Verify that the agent correctly initializes with approved entity types AND existing relationships from structured data.
 
 **Steps**:
 1. In the sidebar, configure:
    - **User Goal**: Extended goal with unstructured extraction guidance
    - **Approved Files**: `artist_bios.md`, `exhibition_histories.md`, `provenance_notes.md`
    - **Approved Entity Types**: `Artist`, `Artwork`, `Location`, `Exhibition`, `Collection`, `ArtMovement`, `Collector`, `Institution`
+   - **Approved Construction Plan**: 
+     ```
+     CREATED_BY | Artwork | Artist
+     LOCATED_AT | Artwork | Location
+     HAS_MEDIUM | Artwork | Medium
+     ```
 2. Click "Initialize Agent"
 
 **Expected Result**:
 - ✅ Agent initializes successfully
 - ✅ Success message displayed
-- ✅ Session state shows all three required inputs
+- ✅ Session state shows all four inputs (including construction plan)
 - ✅ Approved entity types are available to the agent
+- ✅ Existing relationships from structured data are available to avoid redundancy
 
 ---
 
-### Test 2: Propose Fact Types (with Batch Tool)
+### Test 2: Avoid Redundancy with Existing Relationships
+
+**Objective**: Verify that the agent does NOT propose fact types that duplicate existing relationships from structured data.
+
+**Steps**:
+1. Ensure Test 1 is complete (construction plan is initialized)
+2. Prompt: `Propose fact types that could be extracted from the markdown files`
+3. Review the proposed facts
+4. Check that agent used `get_well_known_relationships` tool
+5. Verify NO duplicates with existing relationships
+
+**Expected Result**:
+- ✅ Agent calls `get_well_known_relationships` at the start
+- ✅ Agent identifies existing relationships: `CREATED_BY`, `LOCATED_AT`, `HAS_MEDIUM`
+- ✅ Agent does NOT propose these fact types:
+  - ❌ `(Artist, created, Artwork)` ← inverse of CREATED_BY
+  - ❌ `(Artwork, created_by, Artist)` ← duplicate of CREATED_BY
+  - ❌ `(Artwork, made_by, Artist)` ← synonym of CREATED_BY
+  - ❌ `(Artwork, located_at, Location)` ← duplicate of LOCATED_AT
+  - ❌ `(Artwork, has_medium, Medium)` ← duplicate of HAS_MEDIUM
+- ✅ Agent ONLY proposes NEW relationships from unstructured text:
+  - ✅ `(Artist, born_in, Location)` ← NEW info from bios
+  - ✅ `(Artist, founded, ArtMovement)` ← NEW info from bios
+  - ✅ `(Artwork, exhibited_at, Exhibition)` ← NEW info from exhibition histories
+  - ✅ `(Artwork, owned_by, Collector)` ← NEW info from provenance
+- ✅ Agent explains which existing relationships were avoided
+
+**Performance Check**:
+- Without construction plan: 8-12 fact types (including 3 redundant ones)
+- With construction plan: 5-9 fact types (NO redundancy with structured data)
+
+---
+
+### Test 3: Propose Fact Types (with Batch Tool)
 
 **Objective**: Verify that the agent proposes relevant fact types using the batch tool to reduce API calls.
 
@@ -650,24 +691,24 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 - ✅ After each file sample, agent adds ALL facts from that file in ONE batch call
 - ✅ Total API calls reduced by 70-80% compared to individual calls
 - ✅ Agent proposes fact types as (subject, predicate, object) triples
-- ✅ Examples: `(Artwork, displayed_at, Exhibition)`, `(Artist, founded, ArtMovement)`, `(Artwork, owned_by, Collection)`
 - ✅ All subjects and objects are from the approved entity types
 - ✅ Predicates are grounded in the source text (not invented)
 - ✅ **No redundant predicates** - similar verbs are consolidated (e.g., "shown in", "displayed in" → single "displayed_at")
 - ✅ **No inverse relationships** - only ONE direction per relationship type (e.g., not both "created" and "created_by")
+- ✅ **No duplicates with structured data** - agent avoided proposing existing relationships
 - ✅ Agent explains consolidation decisions (e.g., "consolidated 'exhibited_in', 'shown_in' into 'displayed_at'")
 - ✅ "Proposed Fact Types" appears in session state
 - ✅ Agent explains why each fact type is relevant
 - ✅ No rate limit errors (or significantly fewer retries)
 
 **Performance Check**:
-- Expected API calls: ~6-9 total (3 files × 2-3 calls per file)
-- Expected fact types: 5-10 unique, canonical relationship types (not 15+ redundant ones)
-- Previous behavior: 20+ API calls + redundant facts (causing rate limits and messy output)
+- Expected API calls: ~8-12 total (1 for get_well_known_relationships + 3 files × 2-3 calls per file)
+- Expected fact types: 5-9 unique, canonical, NON-REDUNDANT relationship types
+- Previous behavior: 20+ API calls + 12+ redundant facts (causing rate limits and messy output)
 
 ---
 
-### Test 3: Validate Entity Type Usage
+### Test 4: Validate Entity Type Usage
 
 **Objective**: Verify that the agent only uses approved entity types.
 
@@ -682,7 +723,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 4: Sample Files for Context
+### Test 5: Sample Files for Context
 
 **Objective**: Verify that the agent samples files to understand relationships.
 
@@ -697,7 +738,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 5: Approve Proposed Facts
+### Test 6: Approve Proposed Facts
 
 **Objective**: Verify that proposed facts can be approved.
 
@@ -712,7 +753,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 6: Modify Fact Proposals Based on Feedback
+### Test 7: Modify Fact Proposals Based on Feedback
 
 **Objective**: Verify that the agent can adjust proposals based on user feedback.
 
@@ -729,7 +770,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 7: Validate Predicate Relevance
+### Test 8: Validate Predicate Relevance
 
 **Objective**: Verify that predicates are grounded in the text.
 
@@ -744,7 +785,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 8: Test Goal Alignment
+### Test 9: Test Goal Alignment
 
 **Objective**: Verify that fact types support the user's goal.
 
@@ -759,7 +800,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 9: Test Session Reset
+### Test 10: Test Session Reset
 
 **Objective**: Verify that resetting the session clears all state properly.
 

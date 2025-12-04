@@ -26,6 +26,7 @@ from src.tools.schema_tools import get_approved_user_goal, get_approved_files
 from src.tools.file_tools import sample_file
 from src.tools.ner_tools import get_approved_entities
 from src.tools.fact_extraction_tools import (
+    get_well_known_relationships,
     add_proposed_fact,
     add_proposed_facts_batch,
     get_proposed_facts,
@@ -76,6 +77,17 @@ Design rules for facts:
 - the predicate should optimize for information that is relevant to the user's goal
 - the predicate must be grounded in the source text. Do not guess or invent relationships.
 
+**Avoid redundancy with existing structured data relationships (CRITICAL):**
+- Use the 'get_well_known_relationships' tool to see what relationships already exist from structured data
+- Do NOT propose fact types that duplicate or overlap with existing relationships
+- Focus on NEW relationships that only appear in unstructured text and add value to the graph
+- Example: If structured data already has (Artwork, CREATED_BY, Artist), do NOT propose:
+  - (Artist, created, Artwork) ← inverse of existing
+  - (Artwork, created_by, Artist) ← duplicate with different case
+  - (Artwork, made_by, Artist) ← synonym of existing
+- Look for relationships that complement existing data with new information types
+  - Example: If structured has (Artwork, CREATED_BY, Artist), unstructured could add (Artwork, influenced_by, ArtMovement)
+
 **Predicate consolidation and deduplication (CRITICAL):**
 - Consolidate similar predicates into ONE canonical form
   - Example: if text uses "displayed in", "shown in", "exhibited in" → choose ONE canonical form like "displayed_at"
@@ -112,25 +124,31 @@ Prepare for the task:
 - use the 'get_approved_user_goal' tool to get the user goal
 - use the 'get_approved_files' tool to get the list of approved markdown files
 - use the 'get_approved_entities' tool to get the list of approved entity types
+- use the 'get_well_known_relationships' tool to get existing relationships from structured data
 
 Think step by step:
 1. Review the approved entity types to understand what subjects and objects are available
-2. Sample ONE markdown file using the 'sample_file' tool
-3. Identify ALL relevant fact types from that file, noting any synonym predicates
-4. Consolidate similar predicates into canonical forms (e.g., "shown in" + "displayed in" → "displayed_at")
-5. Check for inverse relationships and choose ONE direction to represent each relationship
-6. Call 'add_proposed_facts_batch' with ALL deduplicated facts from that file in ONE batch call
-7. Repeat steps 2-6 for each remaining file (sample, identify, consolidate, deduplicate, batch add)
-8. After processing all files, review the complete list for any remaining duplicates or inverses across files
-9. Use 'get_proposed_facts' to retrieve all the proposed facts
-10. Present the proposed fact types to the user, explaining:
+2. Review the existing relationships from structured data to know what to AVOID proposing
+3. Sample ONE markdown file using the 'sample_file' tool
+4. Identify ALL relevant fact types from that file, noting any synonym predicates
+5. Filter out any facts that duplicate or overlap with existing relationships from structured data
+6. Consolidate similar predicates into canonical forms (e.g., "shown in" + "displayed in" → "displayed_at")
+7. Check for inverse relationships and choose ONE direction to represent each relationship
+8. Call 'add_proposed_facts_batch' with ALL deduplicated, non-redundant facts from that file in ONE batch call
+9. Repeat steps 3-8 for each remaining file (sample, identify, filter, consolidate, deduplicate, batch add)
+10. After processing all files, review the complete list for any remaining duplicates or inverses across files
+11. Use 'get_proposed_facts' to retrieve all the proposed facts
+12. Present the proposed fact types to the user, explaining:
     - Why each is relevant to the user's goal
     - What consolidation decisions were made (e.g., "consolidated 'shown_in', 'displayed_in' into 'displayed_at'")
     - The chosen direction for relationships
-11. If the user approves, use the 'approve_proposed_facts' tool to finalize the fact types
-12. If the user provides feedback, iterate on the proposal
+    - Which existing relationships were avoided to prevent redundancy
+13. If the user approves, use the 'approve_proposed_facts' tool to finalize the fact types
+14. If the user provides feedback, iterate on the proposal
 
 **CRITICAL**: 
+- Always check existing relationships from structured data FIRST using 'get_well_known_relationships'
+- Do NOT propose fact types that duplicate existing structured relationships
 - Always use 'add_proposed_facts_batch' instead of calling 'add_proposed_fact' multiple times
 - Always consolidate similar predicates BEFORE adding them to avoid redundancy
 - Always check for inverse relationships and eliminate them
@@ -149,14 +167,15 @@ fact_agent_instruction = f"""
 # ============================================================================
 
 fact_extraction_agent_tools = [
-    get_approved_user_goal,     # From schema_tools
-    get_approved_files,          # From schema_tools
-    get_approved_entities,       # From ner_tools
-    sample_file,                 # From file_tools
-    add_proposed_fact,           # From fact_extraction_tools (use for single facts)
-    add_proposed_facts_batch,    # From fact_extraction_tools (PREFERRED - use for multiple facts)
-    get_proposed_facts,          # From fact_extraction_tools
-    approve_proposed_facts       # From fact_extraction_tools
+    get_approved_user_goal,        # From schema_tools
+    get_approved_files,            # From schema_tools
+    get_approved_entities,         # From ner_tools
+    get_well_known_relationships,  # From fact_extraction_tools (check existing relationships)
+    sample_file,                   # From file_tools
+    add_proposed_fact,             # From fact_extraction_tools (use for single facts)
+    add_proposed_facts_batch,      # From fact_extraction_tools (PREFERRED - use for multiple facts)
+    get_proposed_facts,            # From fact_extraction_tools
+    approve_proposed_facts         # From fact_extraction_tools
 ]
 
 

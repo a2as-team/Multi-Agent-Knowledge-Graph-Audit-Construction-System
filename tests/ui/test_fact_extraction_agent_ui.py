@@ -23,6 +23,7 @@ from src.utils.constants import (
     APPROVED_USER_GOAL,
     APPROVED_FILES,
     APPROVED_ENTITIES,
+    APPROVED_CONSTRUCTION_PLAN,
     PROPOSED_FACTS,
     APPROVED_FACTS
 )
@@ -84,6 +85,7 @@ with st.sidebar:
     1. Approved user goal (extended for unstructured data)
     2. Approved markdown files
     3. **Approved entity types** (from NER Agent)
+    4. **Approved construction plan** (from structured data phase - to avoid redundancy)
     """)
     
     # Approved User Goal
@@ -143,9 +145,41 @@ Institution""",
     
     approved_entities = [e.strip() for e in approved_entities_input.split("\n") if e.strip()]
     
+    st.divider()
+    
+    # Approved Construction Plan (from structured data)
+    st.subheader("4. Approved Construction Plan")
+    st.markdown("Relationships from structured data phase (to avoid redundancy)")
+    
+    st.markdown("**Example format**: `relationship_type | from_label | to_label`")
+    construction_plan_input = st.text_area(
+        "Existing Relationships (one per line)",
+        value="""CREATED_BY | Artwork | Artist
+LOCATED_AT | Artwork | Location
+HAS_MEDIUM | Artwork | Medium""",
+        help="Relationships from structured CSV data (format: REL_TYPE | FromNode | ToNode)",
+        height=80
+    )
+    
+    # Parse construction plan
+    approved_construction_plan = {}
+    if construction_plan_input.strip():
+        for line in construction_plan_input.split("\n"):
+            if "|" in line:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) == 3:
+                    rel_type, from_label, to_label = parts
+                    key = f"{from_label}_{rel_type}_{to_label}"
+                    approved_construction_plan[key] = {
+                        "construction_type": "relationship",
+                        "relationship_type": rel_type,
+                        "from_node_label": from_label,
+                        "to_node_label": to_label
+                    }
+    
     # Validate
     if not (kind_of_graph.strip() and graph_description.strip() and approved_files and approved_entities):
-        st.warning("⚠️ All fields are required to initialize the agent.")
+        st.warning("⚠️ All fields (1-3) are required. Field 4 is optional but recommended.")
     
     # Initialize Agent button
     if st.button("Initialize Agent", type="primary", 
@@ -155,7 +189,8 @@ Institution""",
                 initial_state = {
                     "approved_user_goal": approved_user_goal,
                     "approved_files": approved_files,
-                    "approved_entity_types": approved_entities
+                    "approved_entity_types": approved_entities,
+                    "approved_construction_plan": approved_construction_plan  # Include to avoid redundancy
                 }
                 st.session_state.agent_caller = initialize_agent(initial_state)
                 st.success("Agent initialized successfully!")

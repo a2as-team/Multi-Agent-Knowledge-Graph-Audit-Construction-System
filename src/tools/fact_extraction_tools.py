@@ -8,9 +8,67 @@ from typing import Dict, Any, List
 
 from google.adk.tools import ToolContext
 
-from src.utils.constants import APPROVED_ENTITIES, PROPOSED_FACTS, APPROVED_FACTS
+from src.utils.constants import (
+    APPROVED_ENTITIES, 
+    PROPOSED_FACTS, 
+    APPROVED_FACTS,
+    APPROVED_CONSTRUCTION_PLAN
+)
 from src.utils.logger import logger
 from src.neo4j.neo4j_for_adk import tool_success, tool_error
+
+
+def get_well_known_relationships(tool_context: ToolContext) -> Dict[str, Any]:
+    """
+    Gets the approved relationship types from the construction plan (structured data phase)
+    to avoid proposing redundant fact types in the unstructured data phase.
+    
+    This tool helps the agent understand what relationships already exist in the graph
+    from structured data, so it can focus on discovering NEW relationships that only
+    appear in unstructured text.
+    
+    Args:
+        tool_context: ADK ToolContext containing state and other context
+    
+    Returns:
+        Dictionary with status and existing_relationships list, or empty list if none exist.
+        Each relationship contains: relationship_type, from_label, to_label
+    
+    Example return:
+        {
+            "status": "success",
+            "existing_relationships": [
+                {
+                    "relationship_type": "CREATED_BY",
+                    "from_label": "Artwork",
+                    "to_label": "Artist"
+                },
+                {
+                    "relationship_type": "LOCATED_AT",
+                    "from_label": "Artwork",
+                    "to_label": "Location"
+                }
+            ]
+        }
+    """
+    construction_plan = tool_context.state.get(APPROVED_CONSTRUCTION_PLAN, {})
+    
+    if not construction_plan:
+        logger.info("No approved construction plan found - no existing relationships to avoid")
+        return tool_success("existing_relationships", [])
+    
+    # Extract relationship types from construction plan
+    existing_relationships = []
+    for entry in construction_plan.values():
+        if entry.get("construction_type") == "relationship":
+            existing_relationships.append({
+                "relationship_type": entry.get("relationship_type", ""),
+                "from_label": entry.get("from_node_label", ""),
+                "to_label": entry.get("to_node_label", "")
+            })
+    
+    logger.info(f"Retrieved {len(existing_relationships)} existing relationships from structured data")
+    return tool_success("existing_relationships", existing_relationships)
 
 
 def add_proposed_fact(
