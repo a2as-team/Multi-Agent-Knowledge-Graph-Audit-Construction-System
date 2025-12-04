@@ -1,0 +1,113 @@
+{
+    "description": "Benchmark construction plan for Schema Proposal Agent (Structured) - Story 1 Art Collection Use Case",
+    "test_data": "data/story1/",
+    "approved_files": [
+        "artists.csv",
+        "artworks.csv",
+        "artwork_artist.csv",
+        "artwork_location.csv",
+        "locations.csv",
+        "medium.csv"
+    ],
+    "approved_user_goal": {
+        "kind_of_graph": "art collection provenance",
+        "graph_description": "A knowledge graph for art collection provenance which includes all levels from artworks to artists, locations, and mediums, which can support root-cause analysis and content auditing."
+    },
+    "expected_construction_plan": {
+        "Artist": {
+            "construction_type": "node",
+            "source_file": "artists.csv",
+            "label": "Artist",
+            "unique_column_name": "artist_id",
+            "properties": ["name", "birth_date", "nationality"]
+        },
+        "Artwork": {
+            "construction_type": "node",
+            "source_file": "artworks.csv",
+            "label": "Artwork",
+            "unique_column_name": "artwork_id",
+            "properties": ["title", "creation_date", "dimensions", "medium_id"]
+        },
+        "Location": {
+            "construction_type": "node",
+            "source_file": "locations.csv",
+            "label": "Location",
+            "unique_column_name": "location_id",
+            "properties": ["name", "building", "room"]
+        },
+        "Medium": {
+            "construction_type": "node",
+            "source_file": "medium.csv",
+            "label": "Medium",
+            "unique_column_name": "medium_id",
+            "properties": ["type", "description"]
+        },
+        "CREATED": {
+            "construction_type": "relationship",
+            "source_file": "artwork_artist.csv",
+            "relationship_type": "CREATED",
+            "from_node_label": "Artwork",
+            "from_node_column": "artwork_id",
+            "to_node_label": "Artist",
+            "to_node_column": "artist_id",
+            "properties": []
+        },
+        "LOCATED_AT": {
+            "construction_type": "relationship",
+            "source_file": "artwork_location.csv",
+            "relationship_type": "LOCATED_AT",
+            "from_node_label": "Artwork",
+            "from_node_column": "artwork_id",
+            "to_node_label": "Location",
+            "to_node_column": "location_id",
+            "properties": []
+        },
+        "HAS_MEDIUM": {
+            "construction_type": "relationship",
+            "source_file": "artworks.csv",
+            "relationship_type": "HAS_MEDIUM",
+            "from_node_label": "Artwork",
+            "from_node_column": "artwork_id",
+            "to_node_label": "Medium",
+            "to_node_column": "medium_id",
+            "properties": []
+        }
+    },
+    "validation_criteria": {
+        "nodes": {
+            "count": 4,
+            "required": ["Artist", "Artwork", "Location", "Medium"],
+            "unique_identifiers": {
+                "Artist": "artist_id",
+                "Artwork": "artwork_id",
+                "Location": "location_id",
+                "Medium": "medium_id"
+            }
+        },
+        "relationships": {
+            "count": 3,
+            "required": ["CREATED", "LOCATED_AT", "HAS_MEDIUM"],
+            "full_relationships": ["CREATED", "LOCATED_AT"],
+            "reference_relationships": ["HAS_MEDIUM"]
+        },
+        "graph_connectivity": {
+            "all_nodes_connected": true,
+            "no_isolated_nodes": true,
+            "hub_node": "Artwork"
+        },
+        "design_decisions": {
+            "full_relationships_preferred": "artwork_artist.csv and artwork_location.csv are used instead of foreign keys in artworks.csv",
+            "reference_relationship": "HAS_MEDIUM uses medium_id foreign key from artworks.csv since no dedicated relationship file exists",
+            "properties_exclude_foreign_keys": "Foreign key columns (artist_id, location_id, medium_id) are excluded from Artwork node properties"
+        }
+    },
+    "notes": [
+        "This benchmark represents the ideal output from the Schema Proposal Agent for Story 1 test data",
+        "The agent should identify all 4 node types based on singular filenames and unique identifiers",
+        "Full relationship files (artwork_artist.csv, artwork_location.csv) should be preferred over foreign keys",
+        "Reference relationship (HAS_MEDIUM) should be created from artworks.csv foreign key since no dedicated file exists",
+        "All nodes must be connected - Artwork serves as the hub connecting to Artist, Location, and Medium",
+        "Properties should exclude foreign key columns to avoid redundancy"
+    ]
+}
+

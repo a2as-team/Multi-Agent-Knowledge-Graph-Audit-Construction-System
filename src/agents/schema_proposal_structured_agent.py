@@ -1,0 +1,248 @@
+"""
+Schema Proposal Agent (Structured) - Proposes knowledge graph schema from CSV files.
+
+This agent uses a "critic pattern" with multiple agents:
+1. Schema Proposal Agent - Proposes the schema
+2. Schema Critic Agent - Critiques the proposal
+3. CheckStatusAndEscalate - Checks feedback and escalates if needed
+
+The agents work in a refinement loop until the schema is approved.
+"""
+import warnings
+import logging
+from typing import Dict, Any, AsyncGenerator
+
+from google.adk.agents import Agent, LlmAgent, LoopAgent, BaseAgent
+from google.adk.models.lite_llm import LiteLlm
+from google.adk.tools import ToolContext
+from google.adk.agents.invocation_context import InvocationContext
+from google.adk.events import Event, EventActions
+
+from src.utils.config import DEFAULT_MODEL
+from src.utils.logger import logger
+from src.tools.schema_tools import get_approved_user_goal, get_approved_files
+from src.tools.file_tools import sample_file, search_file
+from src.tools.schema_proposal_tools import (
+    propose_node_construction,
+    propose_relationship_construction,
+    remove_node_construction,
+    remove_relationship_construction,
+    get_proposed_construction_plan,
+    approve_proposed_construction_plan
+)
+
+# Ignore warnings
+warnings.filterwarnings("ignore")
+
+# Set logging level
+logging.basicConfig(level=logging.CRITICAL)
+
+
+# Initialize LLM with Gemini
+try:
+    llm = LiteLlm(model=DEFAULT_MODEL)
+    logger.info(f"Initialized LLM with model: {DEFAULT_MODEL}")
+except Exception as e:
+    logger.error(f"Failed to initialize LLM: {e}")
+    raise
+
+
+# ============================================================================
+# Schema Proposal Agent Instructions
+# ============================================================================
+
+proposal_agent_role_and_goal = """
+    You are an expert at knowledge graph modeling with property graphs. Propose an appropriate
+    schema by specifying construction rules which transform approved files into nodes or relationships.
+    The resulting schema should describe a knowledge graph based on the user goal.
+    
+    Consider feedback if it is available: 
+    <feedback>
+    {feedback}
+    </feedback> 
+"""
+
+proposal_agent_hints = """
+    Every file in the approved files list will become either a node or a relationship.
+    Determining whether a file likely represents a node or a relationship is based
+    on a hint from the filename (is it a single thing or two things) and the
+    identifiers found within the file.
+
+    Because unique identifiers are so important for determining the structure of the graph,
+    always verify the uniqueness of suspected unique identifiers using the 'search_file' tool.
+
+    General guidance for identifying a node or a relationship:
+    - If the file name is singular and has only 1 unique identifier it is likely a node
+    - If the file name is a combination of two things, it is likely a full relationship
+    - If the file name sounds like a node, but there are multiple unique identifiers, that is likely a node with reference relationships
+
+    Design rules for nodes:
+    - Nodes will have unique identifiers. 
+    - Nodes _may_ have identifiers that are used as reference relationships.
+
+    Design rules for relationships:
+    - Relationships appear in two ways: full relationships and reference relationships.
+
+    Full relationships:
+    - Full relationships appear in dedicated relationship files, often having a filename that references two entities
+    - Full relationships typically have references to a source and destination node.
+    - Full relationships _do not have_ unique identifiers, but instead have references to the primary keys of the source and destination nodes.
+    - The absence of a single, unique identifier is a strong indicator that a file is a full relationship.
+    
+    Reference relationships:
+    - Reference relationships appear as foreign key references in node files
+    - Reference relationship foreign key column names often hint at the destination node and relationship type
+    - References may be hierarchical container relationships, with terminology revealing parent-child, "has", "contains", membership, or similar relationship
+    - References may be peer relationships, that is often a self-reference to a similar class of nodes. For example, "knows" or "see also"
+
+    The resulting schema should be a connected graph, with no isolated components.
+"""
+
+proposal_agent_chain_of_thought_directions = """
+    Prepare for the task:
+    - get the user goal using the 'get_approved_user_goal' tool
+    - get the list of approved files using the 'get_approved_files' tool
+    - get the current construction plan using the 'get_proposed_construction_plan' tool
+
+    Think carefully, using tools to perform actions and reconsidering your actions when a tool returns an error:
+    1. For each approved file, consider whether it represents a node or relationship. Check the content for potential unique identifiers using the 'sample_file' tool.
+    2. For each identifier, verify that it is unique by using the 'search_file' tool.
+    3. Use the node vs relationship guidance for deciding whether the file represents a node or a relationship.
+    4. For a node file, propose a node construction using the 'propose_node_construction' tool. 
+    5. If the node contains a reference relationship, use the 'propose_relationship_construction' tool to propose a relationship construction. 
+    6. For a relationship file, propose a relationship construction using the 'propose_relationship_construction' tool
+    7. If you need to remove a construction, use the 'remove_node_construction' or 'remove_relationship_construction' tool
+    8. When you are done with construction proposals, use the 'get_proposed_construction_plan' tool to present the plan to the user
+"""
+
+# Combine all instruction components
+proposal_agent_instruction = f"""
+{proposal_agent_role_and_goal}
+{proposal_agent_hints}
+{proposal_agent_chain_of_thought_directions}
+"""
+
+
+# ============================================================================
+# Schema Critic Agent Instructions
+# ============================================================================
+
+critic_agent_role_and_goal = """
+    You are an expert at knowledge graph modeling with property graphs. 
+    Criticize the proposed schema for relevance to the user goal and approved files.
+"""
+
+critic_agent_hints = """
+    Criticize the proposed schema for relevance and correctness:
+    - Are unique identifiers actually unique? Use the 'search_file' tool to validate. Composite identifiers are not acceptable.
+    - Could any nodes be relationships instead? Double-check that unique identifiers are unique and not references to other nodes. Use the 'search_file' tool to validate
+    - Can you manually trace through the source data to find the necessary information for answering a hypothetical question?
+    - Is every node in the schema connected? What relationships could be missing? Every node should connect to at least one other node.
+    - Are hierarchical container relationships missing? 
+    - Are any relationships redundant? A relationship between two nodes is redundant if it is semantically equivalent to or the inverse of another relationship between those two nodes.
+"""
+
+critic_agent_chain_of_thought_directions = """
+    Prepare for the task:
+    - get the user goal using the 'get_approved_user_goal' tool
+    - get the list of approved files using the 'get_approved_files' tool
+    - get the construction plan using the 'get_proposed_construction_plan' tool
+    - use the 'sample_file' and 'search_file' tools to validate the schema design
+
+    Think carefully, using tools to perform actions and reconsidering your actions when a tool returns an error:
+    1. Analyze each construction rule in the proposed construction plan.
+    2. Use tools to validate the construction rules for relevance and correctness.
+    3. If the schema looks good, respond with a one word reply: 'valid'.
+    4. If the schema has problems, respond with 'retry' and provide feedback as a concise bullet list of problems.
+"""
+
+# Combine all instruction components
+critic_agent_instruction = f"""
+{critic_agent_role_and_goal}
+{critic_agent_hints}
+{critic_agent_chain_of_thought_directions}
+"""
+
+
+# ============================================================================
+# Tool Lists
+# ============================================================================
+
+# Tools for the schema proposal agent
+schema_proposal_agent_tools = [
+    get_approved_user_goal,
+    get_approved_files,
+    get_proposed_construction_plan,
+    sample_file,
+    search_file,
+    propose_node_construction,
+    propose_relationship_construction,
+    remove_node_construction,
+    remove_relationship_construction
+]
+
+# Tools for the schema critic agent (read-only, cannot make changes)
+schema_critic_agent_tools = [
+    get_approved_user_goal,
+    get_approved_files,
+    get_proposed_construction_plan,
+    sample_file,
+    search_file
+]
+
+
+# ============================================================================
+# Agent Definitions
+# ============================================================================
+
+schema_proposal_agent = LlmAgent(
+    name="schema_proposal_agent_v1",
+    description="Proposes a knowledge graph schema based on the user goal and approved file list",
+    model=llm,
+    instruction=proposal_agent_instruction,
+    tools=schema_proposal_agent_tools
+)
+
+schema_critic_agent = LlmAgent(
+    name="schema_critic_agent_v1",
+    description="Criticizes the proposed schema for relevance to the user goal and approved files.",
+    model=llm,
+    instruction=critic_agent_instruction,
+    tools=schema_critic_agent_tools,
+    output_key="feedback"  # The result of calling the critic is placed in the 'feedback' key
+)
+
+
+# ============================================================================
+# CheckStatusAndEscalate Agent
+# ============================================================================
+
+class CheckStatusAndEscalate(BaseAgent):
+    """
+    Checks the feedback from the critic agent and escalates (stops the loop)
+    if the feedback is 'valid'.
+    """
+    
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        feedback = ctx.session.state.get("feedback", "valid")
+        should_stop = (feedback == "valid")
+        yield Event(author=self.name, actions=EventActions(escalate=should_stop))
+
+
+# ============================================================================
+# Schema Refinement Loop
+# ============================================================================
+
+schema_refinement_loop = LoopAgent(
+    name="schema_refinement_loop",
+    description="Analyzes approved files to propose a schema based on user intent and feedback",
+    max_iterations=3,  # Allow up to 3 iterations for refinement
+    sub_agents=[
+        schema_proposal_agent,
+        schema_critic_agent,
+        CheckStatusAndEscalate(name="StopChecker")
+    ]
+)
+
+logger.info("Created Schema Proposal Agent (Structured) with refinement loop")
+
