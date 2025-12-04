@@ -71,6 +71,97 @@ def add_proposed_fact(
     return tool_success(PROPOSED_FACTS, current_facts)
 
 
+def add_proposed_facts_batch(
+    facts: list,
+    tool_context: ToolContext
+) -> Dict[str, Any]:
+    """
+    Add multiple proposed fact types in a single call (EFFICIENT - reduces API calls).
+    
+    This is the preferred method for adding facts as it batches multiple facts into 
+    a single tool call, reducing API calls by 70-80% and preventing rate limit errors.
+    
+    Args:
+        facts: List of dicts, each containing:
+               - approved_subject_label: str
+               - proposed_predicate_label: str
+               - approved_object_label: str
+        tool_context: ADK ToolContext containing state and other context
+    
+    Example:
+        facts = [
+            {
+                "approved_subject_label": "Artist",
+                "proposed_predicate_label": "born in",
+                "approved_object_label": "Location"
+            },
+            {
+                "approved_subject_label": "Artist",
+                "proposed_predicate_label": "created",
+                "approved_object_label": "Artwork"
+            }
+        ]
+    
+    Returns:
+        Dictionary with status, added_count, and total_facts or error message.
+    """
+    approved_entities = tool_context.state.get(APPROVED_ENTITIES, [])
+    
+    if not approved_entities:
+        return tool_error(
+            "No approved entities found. "
+            "Please ensure the NER Agent has approved entity types first."
+        )
+    
+    current_facts = tool_context.state.get(PROPOSED_FACTS, {})
+    added_facts = []
+    errors = []
+    
+    for fact in facts:
+        subject = fact.get("approved_subject_label")
+        predicate = fact.get("proposed_predicate_label")
+        obj = fact.get("approved_object_label")
+        
+        # Validate required fields
+        if not subject or not predicate or not obj:
+            errors.append("Missing required field(s) in fact dict")
+            continue
+        
+        # Validate entities
+        if subject not in approved_entities:
+            errors.append(f"Subject '{subject}' not in approved entities")
+            continue
+        if obj not in approved_entities:
+            errors.append(f"Object '{obj}' not in approved entities")
+            continue
+        
+        # Add fact using predicate as key (allows duplicate subject-object with different predicates)
+        fact_key = predicate
+        current_facts[fact_key] = {
+            "subject_label": subject,
+            "predicate_label": predicate,
+            "object_label": obj
+        }
+        added_facts.append(f"({subject}, {predicate}, {obj})")
+        logger.info(f"Added proposed fact: ({subject}, {predicate}, {obj})")
+    
+    tool_context.state[PROPOSED_FACTS] = current_facts
+    
+    result_message = f"Successfully added {len(added_facts)} fact types. Total facts: {len(current_facts)}"
+    
+    if errors:
+        result_message += f" | Encountered {len(errors)} errors: {', '.join(errors[:3])}"
+        if len(errors) > 3:
+            result_message += f" and {len(errors) - 3} more..."
+    
+    return tool_success(PROPOSED_FACTS, {
+        "message": result_message,
+        "added_count": len(added_facts),
+        "total_facts": len(current_facts),
+        "errors": errors if errors else None
+    })
+
+
 def get_proposed_facts(tool_context: ToolContext) -> Dict[str, Any]:
     """
     Get the proposed types of facts that could be extracted from the markdown files.

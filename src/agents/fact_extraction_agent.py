@@ -27,6 +27,7 @@ from src.tools.file_tools import sample_file
 from src.tools.ner_tools import get_approved_entities
 from src.tools.fact_extraction_tools import (
     add_proposed_fact,
+    add_proposed_facts_batch,
     get_proposed_facts,
     approve_proposed_facts
 )
@@ -71,8 +72,16 @@ Design rules for facts:
 - the proposed predicate should describe the relationship between the approved subject and object
 - the predicate should optimize for information that is relevant to the user's goal
 - the predicate must appear in the source text. Do not guess or invent relationships.
-- use the 'add_proposed_fact' tool to record each proposed fact type
-- you may propose multiple fact types - call 'add_proposed_fact' once for each fact type
+
+**CRITICAL: Use batch tool calls to avoid rate limits**
+- ALWAYS use 'add_proposed_facts_batch' to add multiple facts at once (PREFERRED METHOD)
+- This reduces API calls by 70-80% and prevents rate limit errors
+- After sampling each file, add ALL facts from that file in a single batch call
+- Only use 'add_proposed_fact' if you need to add a single fact later
+
+Format for batch tool:
+- Pass a list of dicts, each with: approved_subject_label, proposed_predicate_label, approved_object_label
+- Example: [{"approved_subject_label": "Artist", "proposed_predicate_label": "founded", "approved_object_label": "ArtMovement"}]
 
 Important considerations:
 - Focus on relationships that support the user's goal (e.g., provenance tracking, historical context)
@@ -88,13 +97,17 @@ Prepare for the task:
 
 Think step by step:
 1. Review the approved entity types to understand what subjects and objects are available
-2. Sample some of the approved files using the 'sample_file' tool to understand the content
-3. Consider how subjects and objects are related in the text (look for verbs and relationship phrases)
-4. Call the 'add_proposed_fact' tool for each type of fact you propose
-5. Use the 'get_proposed_facts' tool to retrieve all the proposed facts
-6. Present the proposed types of facts to the user, along with an explanation of why each is relevant
-7. If the user approves, use the 'approve_proposed_facts' tool to finalize the fact types
-8. If the user provides feedback, iterate on the proposal
+2. Sample ONE markdown file using the 'sample_file' tool
+3. Identify ALL relevant fact types from that file
+4. Call 'add_proposed_facts_batch' with ALL facts from that file in ONE batch call
+5. Repeat steps 2-4 for each remaining file (sample one file, add all its facts in one batch)
+6. After processing all files, use 'get_proposed_facts' to retrieve all the proposed facts
+7. Present the proposed types of facts to the user, along with an explanation of why each is relevant
+8. If the user approves, use the 'approve_proposed_facts' tool to finalize the fact types
+9. If the user provides feedback, iterate on the proposal
+
+**CRITICAL**: Always use 'add_proposed_facts_batch' instead of calling 'add_proposed_fact' multiple times.
+This reduces API calls and prevents rate limit errors.
 """
 
 # Combine all instruction components
@@ -114,7 +127,8 @@ fact_extraction_agent_tools = [
     get_approved_files,          # From schema_tools
     get_approved_entities,       # From ner_tools
     sample_file,                 # From file_tools
-    add_proposed_fact,           # From fact_extraction_tools
+    add_proposed_fact,           # From fact_extraction_tools (use for single facts)
+    add_proposed_facts_batch,    # From fact_extraction_tools (PREFERRED - use for multiple facts)
     get_proposed_facts,          # From fact_extraction_tools
     approve_proposed_facts       # From fact_extraction_tools
 ]

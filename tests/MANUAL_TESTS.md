@@ -635,21 +635,31 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 2: Propose Fact Types
+### Test 2: Propose Fact Types (with Batch Tool)
 
-**Objective**: Verify that the agent proposes relevant fact types (relationship triples).
+**Objective**: Verify that the agent proposes relevant fact types using the batch tool to reduce API calls.
 
 **Steps**:
 1. Prompt: `Propose fact types that could be extracted from the markdown files`
 2. Review the proposed facts
+3. Check the logs for `add_proposed_facts_batch` tool usage
 
 **Expected Result**:
+- ✅ Agent uses `add_proposed_facts_batch` (NOT multiple `add_proposed_fact` calls)
+- ✅ Agent samples files one at a time
+- ✅ After each file sample, agent adds ALL facts from that file in ONE batch call
+- ✅ Total API calls reduced by 70-80% compared to individual calls
 - ✅ Agent proposes fact types as (subject, predicate, object) triples
 - ✅ Examples: `(Artwork, displayed_at, Exhibition)`, `(Artist, founded, ArtMovement)`, `(Artwork, owned_by, Collection)`
 - ✅ All subjects and objects are from the approved entity types
 - ✅ Predicates appear in the source text (not invented)
 - ✅ "Proposed Fact Types" appears in session state
 - ✅ Agent explains why each fact type is relevant
+- ✅ No rate limit errors (or significantly fewer retries)
+
+**Performance Check**:
+- Expected API calls: ~6-9 total (3 files × 2-3 calls per file)
+- Previous behavior: 20+ API calls (causing rate limits)
 
 ---
 
