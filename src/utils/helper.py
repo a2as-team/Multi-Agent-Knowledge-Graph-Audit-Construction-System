@@ -259,8 +259,11 @@ class AgentCaller:
                             # Break out of retry loop since this is not a retryable error
                             break
                     
-                    # For other errors, log and re-raise
+                    # For other errors, log with more detail and re-raise
+                    import traceback
                     logger.error(f"Unexpected error during agent call: {e}")
+                    logger.error(f"Error type: {type(e).__name__}")
+                    logger.error(f"Traceback: {traceback.format_exc()}")
                     raise
 
         self.session = self.runner.session_service.get_session(
