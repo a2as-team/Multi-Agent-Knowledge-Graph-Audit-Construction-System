@@ -4,7 +4,7 @@ Tools for the Fact Extraction Agent.
 These tools allow the agent to propose and approve fact types (relationship triples)
 that can be extracted from unstructured markdown data.
 """
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from google.adk.tools import ToolContext
 
@@ -72,7 +72,7 @@ def add_proposed_fact(
 
 
 def add_proposed_facts_batch(
-    facts: list,
+    facts: List[Dict[str, str]],
     tool_context: ToolContext
 ) -> Dict[str, Any]:
     """
