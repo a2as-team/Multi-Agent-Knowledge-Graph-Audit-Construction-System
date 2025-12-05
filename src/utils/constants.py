@@ -26,3 +26,8 @@ APPROVED_FACTS = "approved_fact_types"
 # Data Quality Rules Agent State Keys
 PROPOSED_QUALITY_RULES = "proposed_quality_rules"
 APPROVED_QUALITY_RULES = "approved_quality_rules"
+
+# Pre-Ingestion Audit Agent State Keys
+PRE_INGESTION_AUDIT_QUERIES = "pre_ingestion_audit_queries"
+AUDIT_RESOLUTIONS = "audit_resolutions"
+INGESTION_AUDIT_TRAIL = "ingestion_audit_trail"

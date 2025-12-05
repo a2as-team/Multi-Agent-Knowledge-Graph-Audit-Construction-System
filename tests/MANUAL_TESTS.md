@@ -1172,6 +1172,285 @@ Based on the test data, the agent should propose fact types like:
 
 ---
 
+## Pre-Ingestion Audit Agent
+
+### Test 1: Agent Initialization with Construction Plan
+**Objective:** Verify agent can be initialized with construction plan context
+
+**Steps:**
+1. Initialize agent with:
+   - User goal
+   - Construction plan (nodes and relationships with unique columns, properties)
+   - Approved files list
+2. Start chat: "Please scan the files for data quality issues"
+
+**Expected:**
+- Agent acknowledges the construction plan
+- Agent mentions which files will be scanned
+- Agent mentions what types of issues it will look for
+
+---
+
+### Test 2: Scan for Duplicate Unique Identifiers
+**Objective:** Verify agent detects duplicate IDs
+
+**Steps:**
+1. Prepare `artworks.csv` with duplicate `artwork_id` values (rows 2 and 5 both have ID=1)
+2. Say: "Scan artworks.csv for duplicate artwork IDs"
+
+**Expected:**
+- Agent calls `scan_csv_for_duplicates`
+- Agent detects the duplicate
+- Agent creates audit query with:
+  - Category: "duplicate_unique_identifier"
+  - Evidence showing both conflicting rows
+  - Proposed actions: ["use_first", "use_second", "merge", "skip_both"]
+  - Severity: "error"
+
+**Verification:**
+- Check PRE_INGESTION_AUDIT_QUERIES in session state
+- Audit query should contain both row data
+- Query status should be "pending_review"
+
+---
+
+### Test 3: Scan for Missing Required Fields
+**Objective:** Verify agent detects NULL/empty values
+
+**Steps:**
+1. Prepare `artists.csv` with missing `name` value in row 3
+2. Say: "Check artists.csv for missing required fields"
+
+**Expected:**
+- Agent calls `check_missing_required_fields`
+- Agent detects missing name
+- Agent creates audit query with:
+  - Category: "missing_required_field"
+  - Evidence: row number, column name, row data
+  - Proposed actions: ["skip_record", "manual_fix"]
+  - Severity: "error"
+
+**Verification:**
+- Check audit queries
+- Should show which row and which field is missing
+
+---
+
+### Test 4: Check Foreign Key Validity
+**Objective:** Verify agent detects invalid foreign key references
+
+**Steps:**
+1. Prepare `artworks.csv` with `artist_id=999` (doesn't exist in `artists.csv`)
+2. Say: "Check foreign key references in artworks.csv"
+
+**Expected:**
+- Agent infers that `artist_id` is a foreign key
+- Agent calls `check_foreign_keys`
+- Agent detects invalid reference
+- Agent creates audit query with:
+  - Category: "invalid_foreign_key"
+  - Evidence: FK value, reference file, row data
+  - Proposed actions: ["skip_record", "manual_fix"]
+  - Severity: "error"
+
+**Verification:**
+- Audit query should show FK value 999
+- Should reference artists.csv as the target
+
+---
+
+### Test 5: Comprehensive File Scan
+**Objective:** Verify agent scans for all issue types
+
+**Steps:**
+1. Say: "Please perform a comprehensive scan of all approved files"
+
+**Expected:**
+- Agent scans each file in construction plan
+- For each file, agent checks:
+  - Duplicate unique IDs
+  - Missing required fields
+  - Invalid foreign keys
+- Agent creates audit queries for all issues found
+- Agent presents summary:
+  - Total issues found
+  - Issues by category
+  - Issues by severity
+
+**Verification:**
+- Multiple audit queries created
+- Queries cover all files in construction plan
+- Summary counts match actual queries
+
+---
+
+### Test 6: View Audit Queries
+**Objective:** Verify agent can present audit queries
+
+**Steps:**
+1. After scanning, say: "Show me all the audit queries"
+
+**Expected:**
+- Agent retrieves audit queries
+- Agent presents organized view:
+  - Grouped by severity (errors first)
+  - Grouped by category
+  - Count summaries
+- Each query shows:
+  - Query ID
+  - Issue description
+  - Affected file and row
+  - Resolution options
+
+---
+
+### Test 7: Resolve Audit Query (Use First)
+**Objective:** Verify user can resolve duplicate with "use_first"
+
+**Steps:**
+1. Find audit query for duplicate ID
+2. Say: "For query [query_id], use the first record"
+
+**Expected:**
+- Agent calls `resolve_audit_query`
+- Resolution recorded as "use_first"
+- Query status updated to "resolved"
+- Resolution stored in AUDIT_RESOLUTIONS
+
+**Verification:**
+- Check audit query status
+- Check AUDIT_RESOLUTIONS has entry for this query
+
+---
+
+### Test 8: Resolve Audit Query (Skip Record)
+**Objective:** Verify user can choose to skip problematic records
+
+**Steps:**
+1. Find audit query for missing required field
+2. Say: "For query [query_id], skip this record during ingestion"
+
+**Expected:**
+- Resolution recorded as "skip_record"
+- Notes can be added explaining why
+- Query marked as resolved
+
+---
+
+### Test 9: Resolve Audit Query (Manual Fix)
+**Objective:** Verify user can indicate they'll fix source file
+
+**Steps:**
+1. Find audit query for invalid FK
+2. Say: "For query [query_id], I'll fix the source file manually"
+
+**Expected:**
+- Resolution recorded as "manual_fix"
+- Query marked as resolved
+- Agent confirms user will fix source
+
+---
+
+### Test 10: Resolution Progress Tracking
+**Objective:** Verify agent tracks resolution progress
+
+**Steps:**
+1. Generate multiple audit queries (5-10)
+2. Resolve some but not all
+3. Say: "Show me the resolution progress"
+
+**Expected:**
+- Agent shows:
+  - Total queries: X
+  - Resolved: Y
+  - Pending: Z
+  - Percentage complete
+- Agent lists remaining pending queries
+
+---
+
+### Test 11: Complete Resolution Workflow
+**Objective:** Verify full workflow from scan to resolution
+
+**Steps:**
+1. Say: "Scan all files and help me resolve all issues"
+2. Follow agent's guidance to resolve each issue
+3. Continue until all issues resolved
+
+**Expected:**
+- Agent scans all files systematically
+- Agent creates audit queries for all issues
+- Agent guides user through resolving each issue
+- Agent confirms when all issues resolved
+- Agent indicates ready for ingestion
+
+---
+
+### Test 12: Handle Files Without Issues
+**Objective:** Verify agent handles clean files properly
+
+**Steps:**
+1. Prepare files with no data quality issues
+2. Say: "Scan all files for issues"
+
+**Expected:**
+- Agent scans files
+- Agent reports no issues found
+- Agent confirms files are clean and ready for ingestion
+- No audit queries created
+
+---
+
+### Test 13: Foreign Key Inference
+**Objective:** Verify agent correctly infers foreign keys
+
+**Steps:**
+1. Construction plan has properties: ["artwork_id", "title", "artist_id", "location_id"]
+2. Say: "What foreign keys do you detect in artworks.csv?"
+
+**Expected:**
+- Agent identifies `artist_id` as FK (references artists.csv)
+- Agent identifies `location_id` as FK (references locations.csv)
+- Agent does NOT identify `artwork_id` (it's the unique column)
+- Agent explains the inference logic
+
+---
+
+### Test 14: Re-scan After Manual Fix
+**Objective:** Verify agent can re-scan files after user fixes
+
+**Steps:**
+1. Initial scan finds issues
+2. User fixes source files
+3. Say: "Please re-scan to verify my fixes"
+
+**Expected:**
+- Agent re-scans the files
+- Agent reports on changes:
+  - Issues that are now fixed
+  - Issues that remain
+- Agent updates audit queries accordingly
+
+---
+
+### Test 15: Export Audit Report
+**Objective:** Verify agent can summarize all findings
+
+**Steps:**
+1. After all scans and resolutions
+2. Say: "Generate a summary report of all pre-ingestion audit findings"
+
+**Expected:**
+- Agent provides comprehensive report:
+  - Total files scanned
+  - Total issues found
+  - Issues by type
+  - Resolutions made
+  - Outstanding issues (if any)
+  - Ready/not ready for ingestion status
+
+---
+
 ## Entity Resolution Agent
 
 _Test cases to be added..._
