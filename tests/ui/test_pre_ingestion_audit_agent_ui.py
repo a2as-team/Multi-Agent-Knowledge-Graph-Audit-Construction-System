@@ -211,6 +211,93 @@ else:
     st.info("👈 Please initialize the agent in the sidebar to start chatting")
 
 
+# Helper function to handle action button clicks
+async def resolve_issue_with_action(query_id: str, action: str):
+    """Send resolution command to agent."""
+    try:
+        resolution_message = f"Resolve issue {query_id} with action: {action}"
+        response = await st.session_state.agent_caller.call(
+            resolution_message,
+            verbose=st.session_state.verbose_logging
+        )
+        st.session_state.messages.append({"role": "user", "content": resolution_message})
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        return response
+    except Exception as e:
+        st.error(f"Error resolving issue: {e}")
+        return None
+
+
+def render_audit_query_card(query_id: str, query: Dict[str, Any]):
+    """Render an audit query with clickable action buttons."""
+    status = query.get("status", "pending_review")
+    category = query.get("category", "unknown")
+    severity = query.get("severity", "info")
+    
+    # Status badge
+    status_emoji = "⏳" if status == "pending_review" else "✅"
+    severity_color = {"error": "🔴", "warning": "🟡", "info": "🔵"}.get(severity, "⚪")
+    
+    with st.container():
+        st.markdown(f"#### {severity_color} {query_id}")
+        st.markdown(f"**Category:** {category.replace('_', ' ').title()} | **Status:** {status_emoji} {status}")
+        
+        # Description
+        if "description" in query:
+            st.markdown(f"**Description:** {query['description']}")
+        
+        # Evidence
+        if "evidence" in query:
+            with st.expander("📋 View Evidence"):
+                evidence = query["evidence"]
+                if isinstance(evidence, dict):
+                    for key, value in evidence.items():
+                        st.markdown(f"**{key}:** {value}")
+                elif isinstance(evidence, str):
+                    st.markdown(evidence)
+                else:
+                    st.json(evidence)
+        
+        # Action buttons (only for pending queries)
+        if status == "pending_review":
+            proposed_actions = query.get("proposed_actions", [])
+            if proposed_actions:
+                st.markdown("**🎯 Choose Action:**")
+                
+                # Create button columns based on number of actions
+                num_actions = len(proposed_actions)
+                cols = st.columns(num_actions)
+                
+                # Action button labels
+                action_labels = {
+                    "skip_record": "⏭️ Skip Record",
+                    "use_first": "1️⃣ Use First",
+                    "use_second": "2️⃣ Use Second",
+                    "merge_data": "🔀 Merge Data",
+                    "manual_fix": "🔧 Manual Fix",
+                    "update_construction_plan": "📝 Update Plan",
+                    "approve": "✅ Approve",
+                    "reject": "❌ Reject"
+                }
+                
+                for idx, action in enumerate(proposed_actions):
+                    with cols[idx]:
+                        button_label = action_labels.get(action, action.replace("_", " ").title())
+                        if st.button(button_label, key=f"{query_id}_{action}", use_container_width=True):
+                            # Store the resolution request
+                            st.session_state[f"pending_resolution_{query_id}"] = action
+                            st.rerun()
+        else:
+            # Show resolution if already resolved
+            resolution = query.get("resolution", {})
+            if resolution:
+                st.success(f"✅ **Resolved:** {resolution.get('action', 'Unknown action')}")
+                if "notes" in resolution:
+                    st.markdown(f"*Notes:* {resolution['notes']}")
+        
+        st.divider()
+
+
 # Audit Query Dashboard
 st.divider()
 st.header("3. Audit Query Dashboard")
@@ -219,6 +306,24 @@ if st.session_state.agent_caller is not None:
     async def get_session_state():
         session = await st.session_state.agent_caller.get_session()
         return session.state if session else {}
+    
+    # Check for pending resolutions and process them
+    pending_resolutions = [key for key in st.session_state.keys() if key.startswith("pending_resolution_")]
+    if pending_resolutions:
+        for key in pending_resolutions:
+            query_id = key.replace("pending_resolution_", "")
+            action = st.session_state[key]
+            
+            with st.spinner(f"Resolving {query_id} with action: {action}..."):
+                response = asyncio.run(resolve_issue_with_action(query_id, action))
+                if response:
+                    st.success(f"✅ Resolved {query_id}")
+            
+            # Clean up
+            del st.session_state[key]
+        
+        # Rerun to refresh the display
+        st.rerun()
     
     try:
         session_state = asyncio.run(get_session_state())
@@ -248,34 +353,32 @@ if st.session_state.agent_caller is not None:
             col2.metric("🟡 Warnings", len(warnings))
             col3.metric("🔵 Info", len(infos))
             
-            # Display queries by severity
+            # Display queries by severity with action buttons
             st.divider()
             
             if errors:
                 st.markdown("### 🔴 Error-Level Issues")
                 for query_id, query in errors.items():
-                    with st.expander(f"{query_id} - {query.get('category', 'unknown')} ({query.get('status', 'pending')})"):
-                        st.json(query)
+                    render_audit_query_card(query_id, query)
             
             if warnings:
                 st.markdown("### 🟡 Warning-Level Issues")
                 for query_id, query in warnings.items():
-                    with st.expander(f"{query_id} - {query.get('category', 'unknown')} ({query.get('status', 'pending')})"):
-                        st.json(query)
+                    render_audit_query_card(query_id, query)
             
             if infos:
                 st.markdown("### 🔵 Info-Level Issues")
                 for query_id, query in infos.items():
-                    with st.expander(f"{query_id} - {query.get('category', 'unknown')} ({query.get('status', 'pending')})"):
-                        st.json(query)
+                    render_audit_query_card(query_id, query)
         else:
             st.info("No audit queries generated yet. Ask the agent to scan the files.")
         
         # Resolutions summary
         if resolutions:
             st.divider()
-            st.subheader("✅ Resolutions")
-            st.json(resolutions)
+            st.subheader("✅ Resolutions Summary")
+            for query_id, resolution in resolutions.items():
+                st.markdown(f"**{query_id}:** {resolution.get('action', 'Unknown')} - {resolution.get('status', 'Unknown')}")
             
     except Exception as e:
         st.error(f"Error displaying audit queries: {e}")
@@ -302,31 +405,42 @@ st.divider()
 with st.expander("💡 Tips for Using This Agent"):
     st.markdown("""
     **Getting Started:**
-    1. Initialize the agent with your construction plan and files
+    1. Initialize the agent with your construction plan
     2. Ask the agent to scan the files for issues
-    3. Review audit queries in the dashboard
-    4. Resolve each issue by providing your decision
+    3. Review audit queries in the dashboard below
+    4. Click action buttons to resolve each issue (or chat with the agent)
     
     **Example Prompts:**
     - "Please scan all files for data quality issues"
     - "Scan artworks.csv for duplicate IDs"
     - "Check for missing required fields in artists.csv"
     - "Show me all audit queries"
-    - "For query pre_ing_001, use the first record"
-    - "Resolve pre_ing_002 by skipping the record"
     
-    **Resolution Options:**
-    - `skip_record`: Don't import this record
-    - `use_first`: Use first occurrence (for duplicates)
-    - `use_second`: Use second occurrence (for duplicates)
-    - `merge`: Combine both records (for duplicates)
-    - `manual_fix`: User will fix source file
-    - `approve`: Accept the finding and proceed
-    - `reject`: Reject the finding (false positive)
+    **Two Ways to Resolve Issues:**
     
-    **Dashboard:**
+    1. **Click Action Buttons (Recommended):** 
+       - Each pending issue shows clickable action buttons
+       - Simply click your preferred action to resolve
+       - The agent processes your decision automatically
+    
+    2. **Chat with Agent:**
+       - "For query pre_ing_001, use the first record"
+       - "Resolve pre_ing_002 by skipping the record"
+    
+    **Resolution Options Explained:**
+    - ⏭️ **Skip Record**: Don't import this record
+    - 1️⃣ **Use First**: Use first occurrence (for duplicates)
+    - 2️⃣ **Use Second**: Use second occurrence (for duplicates)
+    - 🔀 **Merge Data**: Combine both records (for duplicates)
+    - 🔧 **Manual Fix**: User will fix source file
+    - 📝 **Update Plan**: Adjust construction plan instead of file
+    - ✅ **Approve**: Accept the finding and proceed
+    - ❌ **Reject**: Reject the finding (false positive)
+    
+    **Dashboard Features:**
     - View all audit queries organized by severity
     - See pending vs resolved counts
-    - Expand each query to see full details
+    - Clickable action buttons for quick resolution
+    - Evidence details in expandable sections
     """)
 
