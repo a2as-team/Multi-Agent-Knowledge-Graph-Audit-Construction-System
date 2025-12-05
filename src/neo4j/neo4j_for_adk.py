@@ -122,9 +122,14 @@ class Neo4jForADK:
             )
         
         self.database_name = neo4j_database
+        # Create driver with connection pool settings to avoid multiple auth attempts
         self._driver = GraphDatabase.driver(
             neo4j_uri,
-            auth=(neo4j_username, neo4j_password)
+            auth=(neo4j_username, neo4j_password),
+            max_connection_lifetime=30 * 60,  # 30 minutes
+            max_connection_pool_size=50,
+            connection_acquisition_timeout=2,  # 2 seconds
+            encrypted=False  # For local development
         )
     
     def get_driver(self):
