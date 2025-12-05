@@ -220,3 +220,24 @@ def approve_proposed_construction_plan(tool_context: ToolContext) -> Dict[str, A
     logger.info("Approved construction plan")
     return tool_success(APPROVED_CONSTRUCTION_PLAN, tool_context.state[APPROVED_CONSTRUCTION_PLAN])
 
+
+def get_approved_construction_plan(tool_context: ToolContext) -> Dict[str, Any]:
+    """
+    Get the approved construction plan.
+    
+    Args:
+        tool_context: ADK ToolContext containing state and other context
+    
+    Returns:
+        Dictionary with status and approved_construction_plan or empty dict if not yet approved.
+    """
+    approved_plan = tool_context.state.get(APPROVED_CONSTRUCTION_PLAN, {})
+    
+    if not approved_plan:
+        return tool_success(APPROVED_CONSTRUCTION_PLAN, {
+            "message": "No construction plan has been approved yet.",
+            "approved_construction_plan": {}
+        })
+    
+    return tool_success(APPROVED_CONSTRUCTION_PLAN, approved_plan)
+

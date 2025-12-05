@@ -361,3 +361,24 @@ def approve_proposed_facts(tool_context: ToolContext) -> Dict[str, Any]:
     logger.info(f"Approved facts: {tool_context.state[APPROVED_FACTS]}")
     return tool_success(APPROVED_FACTS, tool_context.state[APPROVED_FACTS])
 
+
+def get_approved_facts(tool_context: ToolContext) -> Dict[str, Any]:
+    """
+    Get the approved fact types.
+    
+    Args:
+        tool_context: ADK ToolContext containing state and other context
+    
+    Returns:
+        Dictionary with status and approved_fact_types or empty dict if not yet approved.
+    """
+    approved_facts = tool_context.state.get(APPROVED_FACTS, {})
+    
+    if not approved_facts:
+        return tool_success(APPROVED_FACTS, {
+            "message": "No fact types have been approved yet.",
+            "approved_facts": {}
+        })
+    
+    return tool_success(APPROVED_FACTS, approved_facts)
+
