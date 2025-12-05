@@ -17,6 +17,7 @@ from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools import ToolContext
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
+from google.genai import types
 
 from src.utils.config import DEFAULT_MODEL
 from src.utils.logger import logger
@@ -325,19 +326,66 @@ class CheckStatusAndEscalate(BaseAgent):
         is_valid = feedback_str == "valid"
         
         if is_valid:
-            # Facts are valid - exit loop
+            # Facts are valid - exit loop with friendly message
             logger.info("✅ Fact types validated by critic - exiting refinement loop")
+            
+            # Get proposed facts count for the message
+            proposed_facts = ctx.session.state.get("proposed_fact_types", {})
+            fact_count = len(proposed_facts)
+            
+            # Create success message
+            success_message = (
+                f"✅ **Fact Extraction Complete!**\n\n"
+                f"I've successfully proposed and validated **{fact_count} fact types** from the markdown files.\n\n"
+                f"**What's been done:**\n"
+                f"- ✅ Analyzed all approved markdown files\n"
+                f"- ✅ Identified relevant relationship types based on your goal\n"
+                f"- ✅ Filtered out duplicates with existing structured relationships\n"
+                f"- ✅ Validated by the critic agent\n\n"
+                f"**Next steps:**\n"
+                f"- Review the proposed fact types above\n"
+                f"- If you approve, say 'yes' or 'approve'\n"
+                f"- If you want changes, let me know what to adjust\n\n"
+                f"Ready for your review! 🎯"
+            )
+            
+            # Yield message before escalating
+            response_content = types.Content(
+                role='model',
+                parts=[types.Part(text=success_message)]
+            )
+            yield Event(author=self.name, content=response_content)
+            
+            # Now escalate to exit loop
             yield Event(author=self.name, actions=EventActions(escalate=True))
+            
         elif iteration >= self.MAX_ITERATIONS:
             # Max iterations reached - escalate with message
             logger.warning(f"⚠️ Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
             
-            # Store escalation message in state for UI
-            ctx.session.state["escalation_message"] = (
-                f"⚠️ After {self.MAX_ITERATIONS} refinement iterations, there are still issues:\n\n" +
-                str(feedback) +
-                f"\n\n💡 The agent has done its best. Please review and manually address remaining issues."
+            # Create warning message
+            warning_message = (
+                f"⚠️ **Maximum Iterations Reached**\n\n"
+                f"After {self.MAX_ITERATIONS} refinement iterations, there are still some issues:\n\n"
+                f"{str(feedback)}\n\n"
+                f"💡 **What this means:**\n"
+                f"The agent has done its best to refine the fact types, but some validation issues remain. "
+                f"You can:\n"
+                f"- Review the current proposals and manually approve if they're acceptable\n"
+                f"- Provide specific feedback to guide further refinement\n"
+                f"- Ask questions about the proposed fact types\n\n"
+                f"The proposals are available for your review."
             )
+            
+            # Store escalation message in state for UI
+            ctx.session.state["escalation_message"] = warning_message
+            
+            # Yield message before escalating
+            response_content = types.Content(
+                role='model',
+                parts=[types.Part(text=warning_message)]
+            )
+            yield Event(author=self.name, content=response_content)
             
             # Escalate to exit loop
             yield Event(author=self.name, actions=EventActions(escalate=True))

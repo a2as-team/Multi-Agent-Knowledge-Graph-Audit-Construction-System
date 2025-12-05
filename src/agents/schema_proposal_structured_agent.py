@@ -10,13 +10,14 @@ The agents work in a refinement loop until the schema is approved.
 """
 import warnings
 import logging
-from typing import Dict, Any, AsyncGenerator
+from typing import Dict, Any, AsyncGenerator, ClassVar
 
 from google.adk.agents import Agent, LlmAgent, LoopAgent, BaseAgent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools import ToolContext
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
+from google.genai import types
 
 from src.utils.config import DEFAULT_MODEL
 from src.utils.logger import logger
@@ -269,14 +270,108 @@ schema_critic_agent = LlmAgent(
 
 class CheckStatusAndEscalate(BaseAgent):
     """
-    Checks the feedback from the critic agent and escalates (stops the loop)
-    if the feedback is 'valid'.
+    Custom agent that checks the critic feedback status.
+    - If "valid": exits the loop and presents to user
+    - If "retry": continues the loop with feedback
+    - If max iterations reached: escalates to user
     """
     
+    # Class variable for max iterations (ClassVar to avoid Pydantic field validation)
+    MAX_ITERATIONS: ClassVar[int] = 3
+    
+    def __init__(self, name: str = "check_status_and_escalate"):
+        super().__init__(name=name)
+    
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        """Check feedback status and decide whether to continue loop."""
+        
+        # Get current iteration count
+        iteration = ctx.session.state.get("schema_refinement_iteration", 0)
+        iteration += 1
+        ctx.session.state["schema_refinement_iteration"] = iteration
+        
+        logger.info(f"📊 Schema refinement iteration: {iteration}/{self.MAX_ITERATIONS}")
+        
+        # Get critic feedback (stored via output_key="feedback")
         feedback = ctx.session.state.get("feedback", "valid")
-        should_stop = (feedback == "valid")
-        yield Event(author=self.name, actions=EventActions(escalate=should_stop))
+        feedback_str = str(feedback).strip().lower()
+        
+        # Log the feedback for debugging
+        logger.info(f"💬 Critic feedback: {feedback_str[:100]}...")
+        
+        # Check if feedback indicates valid
+        is_valid = feedback_str == "valid"
+        
+        if is_valid:
+            # Schema is valid - exit loop with friendly message
+            logger.info("✅ Schema validated by critic - exiting refinement loop")
+            
+            # Get proposed schema count for the message
+            proposed_plan = ctx.session.state.get("proposed_construction_plan", {})
+            construction_count = len(proposed_plan)
+            
+            # Create success message
+            success_message = (
+                f"✅ **Schema Proposal Complete!**\n\n"
+                f"I've successfully proposed and validated **{construction_count} schema constructions** from the CSV files.\n\n"
+                f"**What's been done:**\n"
+                f"- ✅ Analyzed all approved CSV files\n"
+                f"- ✅ Identified nodes and relationships based on data structure\n"
+                f"- ✅ Verified unique identifiers and foreign keys\n"
+                f"- ✅ Validated by the critic agent\n\n"
+                f"**Next steps:**\n"
+                f"- Review the proposed schema above\n"
+                f"- If you approve, say 'yes' or 'approve the schema'\n"
+                f"- If you want changes, let me know what to adjust\n\n"
+                f"Ready for your review! 🎯"
+            )
+            
+            # Yield message before escalating
+            response_content = types.Content(
+                role='model',
+                parts=[types.Part(text=success_message)]
+            )
+            yield Event(author=self.name, content=response_content)
+            
+            # Now escalate to exit loop
+            yield Event(author=self.name, actions=EventActions(escalate=True))
+            
+        elif iteration >= self.MAX_ITERATIONS:
+            # Max iterations reached - escalate with message
+            logger.warning(f"⚠️ Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
+            
+            # Create warning message
+            warning_message = (
+                f"⚠️ **Maximum Iterations Reached**\n\n"
+                f"After {self.MAX_ITERATIONS} refinement iterations, there are still some issues:\n\n"
+                f"{str(feedback)}\n\n"
+                f"💡 **What this means:**\n"
+                f"The agent has done its best to refine the schema, but some validation issues remain. "
+                f"You can:\n"
+                f"- Review the current proposals and manually approve if they're acceptable\n"
+                f"- Provide specific feedback to guide further refinement\n"
+                f"- Ask questions about the proposed schema\n\n"
+                f"The proposals are available for your review."
+            )
+            
+            # Store escalation message in state for UI
+            ctx.session.state["escalation_message"] = warning_message
+            
+            # Yield message before escalating
+            response_content = types.Content(
+                role='model',
+                parts=[types.Part(text=warning_message)]
+            )
+            yield Event(author=self.name, content=response_content)
+            
+            # Escalate to exit loop
+            yield Event(author=self.name, actions=EventActions(escalate=True))
+        else:
+            # Continue loop - pass feedback to proposal agent
+            logger.info(f"🔄 Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
+            logger.info(f"📝 Feedback will be automatically injected into proposal agent via {{feedback}} template")
+            # Do not escalate - loop will continue
+            yield Event(author=self.name, actions=EventActions(escalate=False))
 
 
 # ============================================================================
