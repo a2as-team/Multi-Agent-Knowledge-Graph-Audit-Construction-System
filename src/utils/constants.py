@@ -22,3 +22,7 @@ APPROVED_ENTITIES = "approved_entity_types"
 # Fact Extraction Agent State Keys
 PROPOSED_FACTS = "proposed_fact_types"
 APPROVED_FACTS = "approved_fact_types"
+
+# Data Quality Rules Agent State Keys
+PROPOSED_QUALITY_RULES = "proposed_quality_rules"
+APPROVED_QUALITY_RULES = "approved_quality_rules"

@@ -937,6 +937,241 @@ Based on the test data, the agent should propose fact types like:
 
 ---
 
+## Data Quality Rules Agent
+
+### Test 1: Agent Initialization with Schema Context
+**Objective:** Verify agent can be initialized with schema context
+
+**Steps:**
+1. Initialize agent with:
+   - User goal describing an art provenance graph
+   - Construction plan with Artwork, Artist, Location nodes
+   - CREATED_BY and LOCATED_AT relationships
+   - Entity types: Artist, Artwork, Location, Exhibition, Collector
+   - Fact types: born_in, exhibited_in, owned_by
+2. Start chat: "Please help me define quality rules for this knowledge graph"
+
+**Expected:**
+- Agent acknowledges the schema context
+- Agent mentions understanding the domain (art provenance)
+- Agent offers to propose quality rules
+
+---
+
+### Test 2: Propose Initial Quality Rules
+**Objective:** Verify agent proposes relevant quality rules
+
+**Steps:**
+1. After initialization, say: "Please propose quality rules for this graph"
+
+**Expected:**
+- Agent proposes 5-10 relevant rules
+- Rules should include:
+  - Required relationship rules (e.g., Artwork must have CREATED_BY)
+  - Orphan detection rules
+  - Unresolved entity detection
+- Rules organized by severity (error, warning, info)
+- Each rule has clear description
+
+**Verification:**
+- Check "Proposed Rules" tab in session state
+- Verify rules are stored with correct structure
+
+---
+
+### Test 3: Add Custom Rule
+**Objective:** Verify user can request custom rules
+
+**Steps:**
+1. Say: "Add a rule that artwork year must be after artist birth year"
+
+**Expected:**
+- Agent adds a temporal_constraint rule
+- Rule parameters include:
+  - entity_label: "Artwork"
+  - field1: "year"
+  - field2: "birth_year"
+  - operator: ">="
+  - relationship: "CREATED_BY"
+- Rule has appropriate severity (error or warning)
+
+**Verification:**
+- Check proposed rules in session state
+- New rule should be present with correct parameters
+
+---
+
+### Test 4: Remove Rule
+**Objective:** Verify user can remove unwanted rules
+
+**Steps:**
+1. Get list of proposed rules
+2. Say: "Remove the rule about [specific rule_id]"
+
+**Expected:**
+- Agent removes the specified rule
+- Agent confirms removal
+- Updated count shown
+
+**Verification:**
+- Check proposed rules
+- Specified rule should be gone
+
+---
+
+### Test 5: View Organized Rules
+**Objective:** Verify agent presents rules in organized manner
+
+**Steps:**
+1. Say: "Show me all proposed rules organized by severity"
+
+**Expected:**
+- Agent displays rules grouped by:
+  - Error rules (critical)
+  - Warning rules (important)
+  - Info rules (informational)
+- Each rule shows:
+  - Rule ID
+  - Type
+  - Description
+  - Parameters
+
+**Verification:**
+- Rules should be clearly organized
+- Counts should match session state
+
+---
+
+### Test 6: Approve Quality Rules
+**Objective:** Verify approval workflow
+
+**Steps:**
+1. Review proposed rules
+2. Say: "I approve these quality rules"
+
+**Expected:**
+- Agent calls approve_quality_rules tool
+- Rules moved from PROPOSED_QUALITY_RULES to APPROVED_QUALITY_RULES
+- Agent confirms approval
+- Session state updates
+
+**Verification:**
+- Check "Approved Rules" tab
+- All proposed rules should now be in approved
+- Proposed rules should still exist (not cleared)
+
+---
+
+### Test 7: Different Rule Types
+**Objective:** Verify agent can create all rule types
+
+**Steps:**
+1. Request each rule type:
+   - "Add a required relationship rule"
+   - "Add a temporal constraint rule"
+   - "Add a cardinality constraint rule"
+   - "Add an orphan detection rule"
+   - "Add an unresolved entity rule"
+   - "Add a value constraint rule"
+
+**Expected:**
+- Agent creates each rule type correctly
+- Each rule has appropriate parameters for its type
+- Parameters match the rule type requirements
+
+**Verification:**
+- Check each rule in session state
+- Verify rule_type field matches requested type
+- Verify parameters are appropriate for type
+
+---
+
+### Test 8: Schema-Aware Rule Suggestions
+**Objective:** Verify agent suggests rules based on schema
+
+**Steps:**
+1. Initialize with schema that has:
+   - date fields (year, birth_year)
+   - relationships with clear cardinality
+2. Ask: "What rules do you recommend?"
+
+**Expected:**
+- Agent suggests temporal rules for date fields
+- Agent suggests required relationship rules for critical relationships
+- Agent suggests orphan detection for key entity types
+- Suggestions are relevant to the specific schema
+
+---
+
+### Test 9: Rule Parameter Validation
+**Objective:** Verify agent validates rule parameters
+
+**Steps:**
+1. Try to add rule with invalid severity: "Add a rule with severity 'critical'"
+2. Try to add rule with invalid type: "Add a 'super_important' rule"
+
+**Expected:**
+- Agent should catch invalid parameters
+- Agent should suggest correct values
+- Tool should return error for invalid inputs
+
+**Verification:**
+- Check for error messages
+- Invalid rules should not be added
+
+---
+
+### Test 10: Iterative Refinement
+**Objective:** Verify agent supports iterative refinement
+
+**Steps:**
+1. Propose initial rules
+2. Say: "The orphan detection rule is too strict, can we make it a warning instead of error?"
+3. Agent should remove old rule and add new one with warning severity
+
+**Expected:**
+- Agent understands refinement request
+- Agent removes old version
+- Agent adds new version with modified parameters
+- Agent confirms the change
+
+---
+
+### Test 11: Custom Cypher Rule
+**Objective:** Verify agent can handle custom Cypher rules
+
+**Steps:**
+1. Say: "Add a custom rule that checks if any artwork has multiple creators in the same year"
+
+**Expected:**
+- Agent creates a custom_cypher rule
+- Rule includes:
+  - Custom Cypher query
+  - Clear description
+  - Appropriate severity
+- Agent explains what the query checks
+
+---
+
+### Test 12: Re-initialization After Approval
+**Objective:** Verify approved rules persist
+
+**Steps:**
+1. Approve quality rules
+2. Reset chat (but keep session)
+3. Say: "Show me the approved quality rules"
+
+**Expected:**
+- Agent retrieves approved rules from state
+- All previously approved rules are present
+- Counts and details match
+
+**Verification:**
+- Check APPROVED_QUALITY_RULES in session state
+- Should contain all approved rules
+
+---
+
 ## Entity Resolution Agent
 
 _Test cases to be added..._
