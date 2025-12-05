@@ -140,6 +140,14 @@ Think step by step:
 9. Call 'add_proposed_facts_batch' with ALL deduplicated, non-redundant facts from that file in ONE batch call
 10. Repeat steps 4-9 for each remaining file (sample, identify, filter, consolidate, batch add)
 11. After processing all files, use 'get_proposed_facts' to present the current set of fact types
+12. Present the proposed fact types to the user in a clear, organized format:
+    - List each fact type as (Subject, predicate, Object)
+    - Group by subject entity type for readability
+    - Explain how these facts complement existing structured relationships
+    - Note that these have been refined through critic validation
+13. Ask the user if they approve these fact types
+14. If the user approves (says "yes", "approve", "looks good", etc.), call 'approve_proposed_facts' to record the approval
+15. If the user requests changes, note their feedback for the next iteration
 
 **CRITICAL**: 
 - Always check existing relationships from structured data FIRST using 'get_well_known_relationships'
@@ -148,6 +156,7 @@ Think step by step:
 - Always consolidate similar predicates WITHIN each file before adding them
 - If feedback mentions removing a fact, use 'remove_proposed_fact' with the exact predicate_label
 - The critic will handle cross-file consolidation - focus on per-file quality
+- ALWAYS present results to the user and wait for explicit approval before calling 'approve_proposed_facts'
 """
 
 # Combine all instruction components
@@ -353,7 +362,8 @@ fact_proposal_agent_tools = [
     add_proposed_fact,
     add_proposed_facts_batch,
     remove_proposed_fact,
-    get_proposed_facts
+    get_proposed_facts,
+    approve_proposed_facts
 ]
 
 fact_critic_agent_tools = [
