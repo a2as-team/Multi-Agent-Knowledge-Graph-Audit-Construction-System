@@ -404,5 +404,64 @@ fact_refinement_loop = LoopAgent(
 
 logger.info("Created fact extraction agents with critic pattern: fact_refinement_loop")
 
-# Export the main loop agent (backward compatible interface)
-fact_extraction_agent = fact_refinement_loop
+
+# ============================================================================
+# Orchestrator Agent (User-Facing)
+# ============================================================================
+
+orchestrator_agent_instruction = """
+You are coordinating the fact extraction process for knowledge graph construction.
+
+Your role:
+1. When the user asks to propose fact types, use the 'fact_refinement_loop' tool
+2. The loop will automatically refine the proposals through critic validation
+3. **IMMEDIATELY after the loop completes**, call 'get_proposed_facts' to retrieve the results
+4. Present the proposed fact types to the user in a clear, organized format
+5. Explain that these are the refined fact types after validation
+6. Ask the user if they approve these fact types
+7. If the user says yes/approve/looks good, use 'approve_proposed_facts' to record approval
+8. If the user wants changes, acknowledge and offer to help
+
+**CRITICAL**: 
+- ALWAYS call 'get_proposed_facts' immediately after the loop completes
+- ALWAYS present the results to the user (don't just say "done")
+- ALWAYS ask for explicit approval before calling 'approve_proposed_facts'
+- Present facts in a readable format with clear explanations
+
+Think step by step:
+1. User asks to propose fact types → call 'fact_refinement_loop'
+2. Loop completes → IMMEDIATELY call 'get_proposed_facts'
+3. Present results → show the fact types clearly
+4. Wait for approval → user says yes or provides feedback
+5. If approved → call 'approve_proposed_facts' and confirm
+"""
+
+# Convert the loop into a tool that the orchestrator can call
+from google.adk.tools import tool_from_agent
+
+fact_refinement_loop_tool = tool_from_agent(
+    fact_refinement_loop,
+    name="fact_refinement_loop",
+    description="Analyzes markdown files and proposes fact types through an iterative refinement process with automatic critic validation"
+)
+
+# Create orchestrator agent
+orchestrator_agent = LlmAgent(
+    name="fact_extraction_orchestrator",
+    model=llm,
+    description="Coordinates fact extraction and handles user interaction",
+    instruction=orchestrator_agent_instruction,
+    tools=[
+        fact_refinement_loop_tool,
+        get_proposed_facts,
+        approve_proposed_facts,
+        get_approved_user_goal,
+        get_approved_files,
+        get_approved_entities
+    ]
+)
+
+logger.info("Created orchestrator agent: fact_extraction_orchestrator")
+
+# Export the orchestrator as the main agent (user-facing)
+fact_extraction_agent = orchestrator_agent
