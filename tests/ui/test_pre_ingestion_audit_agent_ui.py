@@ -24,7 +24,6 @@ from src.utils.helper import make_agent_caller, AgentCaller
 from src.utils.constants import (
     APPROVED_USER_GOAL,
     APPROVED_CONSTRUCTION_PLAN,
-    APPROVED_FILES,
     PRE_INGESTION_AUDIT_QUERIES,
     AUDIT_RESOLUTIONS
 )
@@ -51,16 +50,15 @@ if "verbose_logging" not in st.session_state:
 
 def initialize_agent(
     approved_user_goal: Dict[str, Any],
-    approved_construction_plan: Dict[str, Any],
-    approved_files: list
+    approved_construction_plan: Dict[str, Any]
 ):
     """Initialize the agent caller with approved context."""
     try:
         # Initial state with all approved context
+        # Note: Files to scan are derived from construction_plan, not a separate list
         initial_state = {
             APPROVED_USER_GOAL: approved_user_goal,
-            APPROVED_CONSTRUCTION_PLAN: approved_construction_plan,
-            APPROVED_FILES: approved_files
+            APPROVED_CONSTRUCTION_PLAN: approved_construction_plan
         }
         
         # Create agent caller with initial state
@@ -88,16 +86,9 @@ user_goal = st.sidebar.text_area(
     height=100
 )
 
-# Approved Files
-st.sidebar.subheader("Approved Files")
-approved_files_text = st.sidebar.text_area(
-    "Files (comma-separated)",
-    value="artworks.csv, artists.csv, locations.csv",
-    height=60
-)
-
 # Construction Plan
 st.sidebar.subheader("Approved Construction Plan")
+st.sidebar.info("📌 Files to scan are derived from the 'source_file' fields in the construction plan below")
 with st.sidebar.expander("View/Edit Construction Plan"):
     construction_plan_text = st.text_area(
         "JSON",
@@ -149,13 +140,11 @@ if st.sidebar.button("Initialize Agent", type="primary"):
         # Parse inputs
         approved_user_goal = {"graph_description": user_goal}
         approved_construction_plan = json.loads(construction_plan_text)
-        approved_files = [f.strip() for f in approved_files_text.split(",")]
         
-        # Initialize agent
+        # Initialize agent (files are derived from construction plan)
         initialize_agent(
             approved_user_goal,
-            approved_construction_plan,
-            approved_files
+            approved_construction_plan
         )
         
         # Clear messages

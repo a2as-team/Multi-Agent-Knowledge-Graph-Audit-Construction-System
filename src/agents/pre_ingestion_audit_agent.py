@@ -13,7 +13,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from src.utils.config import DEFAULT_MODEL
 from src.utils.logger import logger
-from src.tools.schema_tools import get_approved_user_goal, get_approved_files
+from src.tools.schema_tools import get_approved_user_goal
 from src.tools.schema_proposal_tools import get_approved_construction_plan
 from src.tools.pre_ingestion_audit_tools import (
     scan_csv_for_duplicates,
@@ -108,8 +108,7 @@ agent_chain_of_thought = """
 AVAILABLE TOOLS (use these exact names - no other functions exist):
 - get_approved_user_goal: Get the user's goal
 - get_approved_construction_plan: Get the approved schema
-- get_approved_files: Get the list of approved files
-- get_construction_plan_summary: Get validation requirements summary
+- get_construction_plan_summary: Get validation requirements and files to scan
 - scan_csv_for_duplicates: Scan a CSV for duplicate unique identifiers
 - check_missing_required_fields: Check a CSV for missing/NULL values
 - check_foreign_keys: Check if foreign key values exist in reference table
@@ -120,12 +119,14 @@ AVAILABLE TOOLS (use these exact names - no other functions exist):
 **Workflow:**
 
 1. **Understand Requirements**
-   - Get the construction plan
-   - Get the construction plan summary
-   - Understand which files, columns, and relationships to validate
+   - Get the construction plan using get_approved_construction_plan
+   - Get the construction plan summary using get_construction_plan_summary
+   - The summary extracts all source files from the construction plan
+   - Files to scan = node_files + relationship_files from the summary
+   - Understand which columns and relationships to validate
 
-2. **Scan Each Node File**
-   - For each node construction:
+2. **Scan Each Node File (from construction plan)**
+   - For each file in node_files (from get_construction_plan_summary):
      a) Scan for duplicate unique identifiers
      b) Check for missing required fields (all properties)
      c) Infer foreign keys (properties ending in _id)
@@ -191,7 +192,6 @@ agent_instruction = f"""
 agent_tools = [
     get_approved_user_goal,
     get_approved_construction_plan,
-    get_approved_files,
     get_construction_plan_summary,
     scan_csv_for_duplicates,
     check_missing_required_fields,

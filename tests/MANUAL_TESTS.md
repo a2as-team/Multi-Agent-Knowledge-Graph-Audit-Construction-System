@@ -1181,12 +1181,13 @@ Based on the test data, the agent should propose fact types like:
 1. Initialize agent with:
    - User goal
    - Construction plan (nodes and relationships with unique columns, properties)
-   - Approved files list
+   - **Note:** Files to scan are automatically derived from `source_file` fields in construction plan
 2. Start chat: "Please scan the files for data quality issues"
 
 **Expected:**
 - Agent acknowledges the construction plan
-- Agent mentions which files will be scanned
+- Agent derives files to scan from the construction plan's `source_file` values
+- Agent mentions which files will be scanned (from construction plan)
 - Agent mentions what types of issues it will look for
 
 ---
