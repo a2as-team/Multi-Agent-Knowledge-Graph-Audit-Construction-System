@@ -238,31 +238,90 @@ if st.sidebar.button("🗑️ Clear Neo4j Database", disabled=not clear_confirme
 
 # Neo4j setup instructions
 with st.sidebar.expander("📖 Neo4j Setup Instructions"):
+    setup_method = st.radio(
+        "Choose setup method:",
+        ["🐳 Docker (Recommended)", "🖥️ Neo4j Desktop"],
+        key="neo4j_setup_method"
+    )
+    
+    if setup_method == "🐳 Docker (Recommended)":
+        st.markdown("""
+        **Quick Setup with Docker:**
+        
+        **1. Install Docker:**
+        - Download Docker Desktop: https://docs.docker.com/get-docker/
+        - Start Docker Desktop
+        
+        **2. Run Setup Script:**
+        
+        **Linux/macOS:**
+        ```bash
+        chmod +x scripts/setup_neo4j.sh
+        ./scripts/setup_neo4j.sh
+        ```
+        
+        **Windows (PowerShell):**
+        ```powershell
+        .\scripts\setup_neo4j.ps1
+        ```
+        
+        **Or use Docker Compose:**
+        ```bash
+        docker-compose up -d
+        ```
+        
+        **3. Set Environment Variables:**
+        Create/update `.env` file:
+        ```
+        NEO4J_URI=bolt://localhost:7687
+        NEO4J_USERNAME=neo4j
+        NEO4J_PASSWORD=your_password
+        NEO4J_DATABASE=neo4j
+        ```
+        
+        **4. Place CSV Files:**
+        - Copy CSV files to `./neo4j_import/` directory
+        - Or use: `docker cp file.csv neo4j:/var/lib/neo4j/import/`
+        
+        **5. Access Neo4j:**
+        - Browser: http://localhost:7474
+        - Bolt: bolt://localhost:7687
+        
+        **Useful Commands:**
+        - `docker logs neo4j` - View logs
+        - `docker stop neo4j` - Stop Neo4j
+        - `docker start neo4j` - Start Neo4j
+        """)
+    else:
+        st.markdown("""
+        **Neo4j Desktop Setup:**
+        
+        **1. Install Neo4j Desktop:**
+        - Download from https://neo4j.com/download/
+        - Install and create a new database
+        
+        **2. Set Environment Variables:**
+        Create a `.env` file in project root:
+        ```
+        NEO4J_URI=bolt://localhost:7687
+        NEO4J_USERNAME=neo4j
+        NEO4J_PASSWORD=your_password
+        NEO4J_DATABASE=neo4j
+        ```
+        
+        **3. Start Neo4j:**
+        - Open Neo4j Desktop
+        - Start your database
+        - Note the bolt:// URI (usually bolt://localhost:7687)
+        
+        **4. Place CSV Files:**
+        - Find Neo4j import directory (check with agent)
+        - Copy CSV files to that directory
+        - Default: `neo4j/import/` or check Neo4j Desktop settings
+        """)
+    
     st.markdown("""
-    **1. Install Neo4j Desktop:**
-    - Download from https://neo4j.com/download/
-    - Install and create a new database
-    
-    **2. Set Environment Variables:**
-    Create a `.env` file in project root:
-    ```
-    NEO4J_URI=bolt://localhost:7687
-    NEO4J_USERNAME=neo4j
-    NEO4J_PASSWORD=your_password
-    NEO4J_DATABASE=neo4j
-    ```
-    
-    **3. Start Neo4j:**
-    - Open Neo4j Desktop
-    - Start your database
-    - Note the bolt:// URI (usually bolt://localhost:7687)
-    
-    **4. Place CSV Files:**
-    - Find Neo4j import directory (check with agent)
-    - Copy CSV files to that directory
-    - Default: `neo4j/import/` or check Neo4j Desktop settings
-    
-    **5. Prevent Duplicates:**
+    **Prevent Duplicates:**
     - Use "Clear Neo4j Database" button before rebuilding
     - Or use MERGE (already implemented) - won't create duplicates
     """)

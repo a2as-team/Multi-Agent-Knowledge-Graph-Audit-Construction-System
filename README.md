@@ -9,10 +9,37 @@ A multi-agent system for building and auditing knowledge graphs, adapted from Ne
 pip install -r requirements.txt
 ```
 
-2. Configure environment variables:
+2. Set up Neo4j (choose one method):
+
+   **Option A: Docker (Recommended)**
+   ```bash
+   # Linux/macOS
+   chmod +x scripts/setup_neo4j.sh
+   ./scripts/setup_neo4j.sh
+   
+   # Windows (PowerShell)
+   .\scripts\setup_neo4j.ps1
+   
+   # Or use Docker Compose
+   docker-compose up -d
+   ```
+   See `scripts/README_NEO4J_SETUP.md` for detailed instructions.
+
+   **Option B: Neo4j Desktop**
+   - Download from https://neo4j.com/download/
+   - Install and create a new database
+   - Start the database
+
+3. Configure environment variables:
    - Copy `.env.example` to `.env` (if not already created)
    - Set `GEMINI_API_KEY` with your Gemini API key
-   - Configure Neo4j connection settings if needed
+   - Set Neo4j connection settings:
+     ```
+     NEO4J_URI=bolt://localhost:7687
+     NEO4J_USERNAME=neo4j
+     NEO4J_PASSWORD=your_password
+     NEO4J_DATABASE=neo4j
+     ```
 
 ## Testing Individual Agents
 
