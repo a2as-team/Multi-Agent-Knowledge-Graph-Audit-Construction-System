@@ -122,6 +122,18 @@ Important considerations:
 """
 
 fact_proposal_agent_chain_of_thought_directions = """
+AVAILABLE TOOLS (use these exact names - no other functions exist):
+- get_approved_user_goal: Get the approved user goal from session state
+- get_approved_files: Get the list of approved markdown files from session state
+- get_approved_entities: Get the list of approved entity types
+- get_well_known_relationships: Get existing relationships from structured data
+- sample_file: Sample content from a markdown file
+- add_proposed_fact: Add a single proposed fact type (use batch version instead)
+- add_proposed_facts_batch: Add multiple proposed fact types in one call (PREFERRED)
+- remove_proposed_fact: Remove a specific proposed fact type by predicate label
+- get_proposed_facts: Get all currently proposed fact types
+- approve_proposed_facts: Approve the proposed fact types (call when user approves)
+
 Prepare for the task:
 - use the 'get_approved_user_goal' tool to get the user goal
 - use the 'get_approved_files' tool to get the list of approved markdown files
@@ -151,6 +163,7 @@ Think step by step:
 15. If the user requests changes, note their feedback for the next iteration
 
 **CRITICAL**: 
+- Only use the exact tool names listed above. Do NOT invent function names like "propose_fact_types" - that function does not exist.
 - Always check existing relationships from structured data FIRST using 'get_well_known_relationships'
 - Do NOT propose fact types that duplicate existing structured relationships
 - Always use 'add_proposed_facts_batch' instead of calling 'add_proposed_fact' multiple times
@@ -243,6 +256,12 @@ You are looking for systematic issues with the proposed fact types, not subjecti
 """
 
 fact_critic_agent_chain_of_thought_directions = """
+AVAILABLE TOOLS (use these exact names - no other functions exist):
+- get_approved_user_goal: Get the approved user goal from session state
+- get_approved_entities: Get the list of approved entity types
+- get_well_known_relationships: Get existing relationships from structured data
+- get_proposed_facts: Get all currently proposed fact types
+
 Prepare for the task:
 - get the user goal using the 'get_approved_user_goal' tool
 - get the approved entity types using the 'get_approved_entities' tool
@@ -272,7 +291,10 @@ Start your response with 'retry' on the first line, then list issues as bullets:
 - "Remove predicate 'referenced_in': synonym with 'recorded_in' - keep 'recorded_in'"
 - "Orphaned entity 'EntityX': not used in any relationship. Add a fact using EntityX"
 
-**CRITICAL**: Always specify the exact predicate_label to remove in single quotes.
+**CRITICAL**: 
+- Only use the exact tool names listed above. Do NOT invent function names.
+- Always specify the exact predicate_label to remove in single quotes.
+- You are read-only - you cannot modify facts, only provide feedback for the proposal agent.
 """
 
 # Combine all instruction components
