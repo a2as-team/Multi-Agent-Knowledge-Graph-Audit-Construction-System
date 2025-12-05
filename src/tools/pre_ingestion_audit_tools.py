@@ -392,7 +392,8 @@ def resolve_audit_query(
     
     Args:
         query_id: ID of the audit query to resolve
-        resolution: User's decision (skip_record, use_first, use_second, merge, manual_fix)
+        resolution: User's decision (skip_record, use_first, use_second, merge, 
+                    manual_fix, update_construction_plan, approve, reject)
         notes: User's notes explaining the decision
         tool_context: ADK ToolContext
     
@@ -414,6 +415,7 @@ def resolve_audit_query(
         "use_second", 
         "merge",
         "manual_fix",
+        "update_construction_plan",
         "approve",
         "reject"
     ]
