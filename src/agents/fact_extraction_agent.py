@@ -349,15 +349,16 @@ class CheckStatusAndEscalate(BaseAgent):
                 f"Ready for your review! 🎯"
             )
             
-            # Yield message before escalating
+            # Combine message and escalation in a single Event
             response_content = types.Content(
                 role='model',
                 parts=[types.Part(text=success_message)]
             )
-            yield Event(author=self.name, content=response_content)
-            
-            # Now escalate to exit loop
-            yield Event(author=self.name, actions=EventActions(escalate=True))
+            yield Event(
+                author=self.name, 
+                content=response_content,
+                actions=EventActions(escalate=True)
+            )
             
         elif iteration >= self.MAX_ITERATIONS:
             # Max iterations reached - escalate with message
@@ -380,15 +381,16 @@ class CheckStatusAndEscalate(BaseAgent):
             # Store escalation message in state for UI
             ctx.session.state["escalation_message"] = warning_message
             
-            # Yield message before escalating
+            # Combine message and escalation in a single Event
             response_content = types.Content(
                 role='model',
                 parts=[types.Part(text=warning_message)]
             )
-            yield Event(author=self.name, content=response_content)
-            
-            # Escalate to exit loop
-            yield Event(author=self.name, actions=EventActions(escalate=True))
+            yield Event(
+                author=self.name,
+                content=response_content,
+                actions=EventActions(escalate=True)
+            )
         else:
             # Continue loop - pass feedback to proposal agent
             logger.info(f"🔄 Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
