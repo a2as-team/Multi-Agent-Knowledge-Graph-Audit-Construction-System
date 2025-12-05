@@ -18,6 +18,7 @@ from src.tools.knowledge_extraction_tools import (
     get_approved_entities,
     get_approved_facts,
     check_neo4j_connection,
+    process_single_file,
     execute_knowledge_extraction,
     get_extraction_progress
 )
@@ -107,7 +108,8 @@ agent_hints = """
 
 agent_chain_of_thought = """
 AVAILABLE TOOLS (use these exact names - no other functions exist):
-- execute_knowledge_extraction: **RECOMMENDED** Execute extraction from all files in one go (reduces API calls from 20-30+ to 1-2)
+- process_single_file: **RECOMMENDED FOR DEBUGGING** Process one markdown file at a time (better error reporting)
+- execute_knowledge_extraction: Process all files in one batch (faster but less detailed errors)
 - get_approved_user_goal: Get the user's goal
 - get_approved_files: Get approved markdown files
 - get_approved_entities: Get approved entity types
@@ -115,52 +117,52 @@ AVAILABLE TOOLS (use these exact names - no other functions exist):
 - check_neo4j_connection: Verify Neo4j is available
 - get_extraction_progress: Get current extraction progress
 
-**OPTIMIZED WORKFLOW (Recommended - reduces API calls by ~90%):**
+**RECOMMENDED WORKFLOW (Process files one by one for better debugging):**
 
-1. **Quick Check** (optional)
+1. **Quick Check**
    - Call check_neo4j_connection to verify Neo4j is available
    - If connection fails, inform user and stop
 
-2. **Execute Knowledge Extraction** (ONE CALL - does everything)
+2. **Get Approved Files**
+   - Call get_approved_files to see which files to process
+   - Present the list to the user
+
+3. **Process Files One by One**
+   - For each file, call process_single_file with the file name
+   - This provides detailed results per file and better error reporting
+   - Report results after each file:
+     * Nodes extracted and created
+     * Relationships extracted and created
+     * Any errors or warnings
+   - If a file fails, continue with the next file
+
+4. **Final Summary**
+   - After processing all files, provide a comprehensive summary
+   - Show total nodes, relationships, chunks, documents
+   - Report any failures
+
+**ALTERNATIVE WORKFLOW (Batch processing - faster but less detailed):**
+
+1. **Quick Check**
+   - Call check_neo4j_connection to verify Neo4j is available
+
+2. **Execute Knowledge Extraction** (ONE CALL - processes all files)
    - Call execute_knowledge_extraction
-   - This tool automatically:
-     * Gets approved files, entities, and facts from session state
-     * Verifies Neo4j connection
-     * Processes ALL markdown files
-     * Chunks each file
-     * Extracts entities and relationships from each chunk using LLM
-     * Creates Document, Chunk, Entity, and Relationship nodes in Neo4j
-     * Links entities to source chunks for provenance
-     * Returns comprehensive results
+   - This tool automatically processes ALL markdown files
+   - Returns comprehensive results
 
 3. **Report Results**
    - Present the extraction results to the user
    - Show summary: total nodes, relationships, chunks, documents
    - Report any failures or warnings
-   - Confirm knowledge extraction is complete
-
-**ALTERNATIVE WORKFLOW (if execute_knowledge_extraction is not available):**
-
-1. **Preparation**
-   - Get approved files
-   - Get approved entities
-   - Get approved facts
-   - Check Neo4j connection
-
-2. **Process Files**
-   - For each file: chunk, extract, load
-   - Report progress after each file
-
-3. **Finalize**
-   - Get extraction progress summary
-   - Report results
 
 **CRITICAL:**
-- **ALWAYS prefer execute_knowledge_extraction** - it's faster and uses fewer API calls
-- If execute_knowledge_extraction fails, you can fall back to individual steps
-- Always check Neo4j connection first (or let execute_knowledge_extraction do it)
-- Report results clearly to the user
+- **PREFER process_single_file** for better debugging and error reporting
+- Use execute_knowledge_extraction only if user explicitly wants batch processing
+- Always check Neo4j connection first
+- Report results clearly to the user after each file
 - Handle errors gracefully and inform user
+- If extraction returns 0 nodes/relationships, check logs for extraction errors
 """
 
 # Combine all instruction components
@@ -178,7 +180,8 @@ agent_instruction = f"""
 # ============================================================================
 
 agent_tools = [
-    execute_knowledge_extraction,  # Add batch execution tool first (recommended)
+    process_single_file,  # Single file processing (recommended for debugging)
+    execute_knowledge_extraction,  # Batch execution tool
     get_approved_user_goal,
     get_approved_files,
     get_approved_entities,

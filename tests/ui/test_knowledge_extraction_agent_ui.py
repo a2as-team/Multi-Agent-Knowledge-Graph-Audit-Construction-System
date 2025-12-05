@@ -11,7 +11,7 @@ This UI allows interactive testing of the Knowledge Extraction Agent with:
 import streamlit as st
 import asyncio
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List
 import sys
 from pathlib import Path
 

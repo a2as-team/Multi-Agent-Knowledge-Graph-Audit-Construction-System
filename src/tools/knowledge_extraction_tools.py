@@ -51,6 +51,7 @@ def _extract_title_from_markdown(markdown_text: str) -> str:
 def _chunk_markdown_by_separator(text: str, separator: str = "---") -> List[Dict[str, Any]]:
     """
     Chunk markdown text by separator (e.g., "---").
+    If no separator found, treat entire file as one chunk.
     
     Args:
         text: The markdown content
@@ -60,6 +61,20 @@ def _chunk_markdown_by_separator(text: str, separator: str = "---") -> List[Dict
         List of chunks with text and metadata
     """
     chunks = []
+    
+    # Check if separator exists in text
+    if separator not in text:
+        # No separator found - treat entire file as one chunk
+        logger.info(f"No separator '{separator}' found in text. Treating entire file as one chunk.")
+        if text.strip():
+            chunks.append({
+                "chunk_id": "chunk_0",
+                "text": text.strip(),
+                "chunk_index": 0
+            })
+        return chunks
+    
+    # Split by separator
     parts = text.split(separator)
     
     for idx, part in enumerate(parts):
@@ -205,14 +220,24 @@ def _extract_entities_and_relationships(
         content = content.strip()
         
         result = json.loads(content)
+        
+        # Validate result structure
+        if "nodes" not in result:
+            result["nodes"] = []
+        if "relationships" not in result:
+            result["relationships"] = []
+        
         return result
         
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse LLM response as JSON: {e}")
-        logger.error(f"Response content: {content[:500] if 'content' in locals() else 'N/A'}")
-        return {"error": f"Failed to parse JSON: {str(e)}"}
+        if 'content' in locals():
+            logger.error(f"Response content (first 1000 chars): {content[:1000]}")
+        return {"error": f"Failed to parse JSON: {str(e)}", "raw_response": content if 'content' in locals() else None}
     except Exception as e:
         logger.error(f"Error during entity extraction: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {"error": str(e)}
 
 
@@ -398,6 +423,7 @@ def _process_markdown_file(
         
         for chunk in chunks:
             # Extract entities and relationships from chunk
+            logger.info(f"Extracting from chunk {chunk['chunk_id']} (length: {len(chunk['text'])} chars)")
             extraction_result = _extract_entities_and_relationships(
                 chunk["text"],
                 context,
@@ -406,10 +432,18 @@ def _process_markdown_file(
             
             if "error" in extraction_result:
                 logger.warning(f"Extraction error in chunk {chunk['chunk_id']}: {extraction_result['error']}")
+                chunk_results.append({
+                    "chunk_id": chunk["chunk_id"],
+                    "error": extraction_result["error"],
+                    "nodes_extracted": 0,
+                    "relationships_extracted": 0
+                })
                 continue
             
             nodes = extraction_result.get("nodes", [])
             relationships = extraction_result.get("relationships", [])
+            
+            logger.info(f"Extracted {len(nodes)} nodes and {len(relationships)} relationships from chunk {chunk['chunk_id']}")
             
             # Create Chunk node
             escaped_chunk_text = chunk["text"][:1000].replace("'", "''")
@@ -429,6 +463,12 @@ def _process_markdown_file(
             
             if chunk_result["status"] == "error":
                 logger.warning(f"Failed to create Chunk node: {chunk_result.get('error_message')}")
+                chunk_results.append({
+                    "chunk_id": chunk["chunk_id"],
+                    "error": f"Failed to create Chunk: {chunk_result.get('error_message')}",
+                    "nodes_extracted": len(nodes),
+                    "relationships_extracted": len(relationships)
+                })
                 continue
             
             chunk_node_id = chunk_result.get("query_result", [{}])[0].get("chunk_id")
@@ -442,9 +482,11 @@ def _process_markdown_file(
                 properties = node_data.get("properties", {})
                 
                 if not label or label not in approved_entities:
+                    logger.debug(f"Skipping node with label '{label}' - not in approved entities")
                     continue
                 
                 if not properties:
+                    logger.debug(f"Skipping node {node_id} - no properties")
                     continue
                 
                 # Use first property as unique identifier for MERGE
@@ -498,6 +540,9 @@ def _process_markdown_file(
                         neo4j_node_id = result_data[0].get("node_id")
                         node_id_map[node_id] = neo4j_node_id
                         total_nodes += 1
+                        logger.debug(f"Created node: {label} with id {neo4j_node_id}")
+                else:
+                    logger.warning(f"Failed to create node {label}: {node_result.get('error_message', 'Unknown error')}")
             
             # Create relationships
             for rel_data in relationships:
@@ -507,6 +552,7 @@ def _process_markdown_file(
                 properties = rel_data.get("properties", {})
                 
                 if start_id not in node_id_map or end_id not in node_id_map:
+                    logger.debug(f"Skipping relationship {rel_type}: start_id={start_id}, end_id={end_id} not in node_id_map")
                     continue
                 
                 start_neo4j_id = node_id_map[start_id]
@@ -518,6 +564,8 @@ def _process_markdown_file(
                     if isinstance(value, str):
                         escaped_value = value.replace("'", "''")
                         set_clauses.append(f"r.`{key}` = '{escaped_value}'")
+                    elif isinstance(value, (int, float, bool)):
+                        set_clauses.append(f"r.`{key}` = {value}")
                     else:
                         set_clauses.append(f"r.`{key}` = {json.dumps(value)}")
                 
@@ -536,11 +584,16 @@ def _process_markdown_file(
                 
                 if rel_result["status"] == "success":
                     total_relationships += 1
+                    logger.debug(f"Created relationship: {rel_type}")
+                else:
+                    logger.warning(f"Failed to create relationship {rel_type}: {rel_result.get('error_message', 'Unknown error')}")
             
             chunk_results.append({
                 "chunk_id": chunk["chunk_id"],
                 "nodes_extracted": len(nodes),
-                "relationships_extracted": len(relationships)
+                "nodes_created": len(node_id_map),
+                "relationships_extracted": len(relationships),
+                "relationships_created": total_relationships - sum(c.get("relationships_created", 0) for c in chunk_results)
             })
         
         return {
@@ -554,7 +607,102 @@ def _process_markdown_file(
         
     except Exception as e:
         logger.error(f"Error processing file {file_path}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {"error": str(e), "file": file_path.name}
+
+
+def process_single_file(
+    file_name: str,
+    tool_context: ToolContext
+) -> Dict[str, Any]:
+    """
+    Process a single markdown file for knowledge extraction.
+    
+    This tool processes one file at a time, which helps with debugging
+    and provides better error reporting.
+    
+    Args:
+        file_name: Name of the markdown file to process
+        tool_context: ADK ToolContext
+    
+    Returns:
+        Dictionary with status and processing results
+    """
+    try:
+        # 1. Get prerequisites
+        approved_entities = tool_context.state.get(APPROVED_ENTITIES, [])
+        if not approved_entities:
+            return tool_error(
+                "No approved entity types found. "
+                "Please ensure the NER agent has been run and entities approved."
+            )
+        
+        approved_facts = tool_context.state.get(APPROVED_FACTS, {})
+        if not approved_facts:
+            return tool_error(
+                "No approved fact types found. "
+                "Please ensure the fact extraction agent has been run and facts approved."
+            )
+        
+        # 2. Check Neo4j connection
+        graphdb = get_graphdb()
+        if graphdb is None:
+            return tool_error(
+                "Neo4j connection not available. "
+                "Please ensure NEO4J_URI, NEO4J_USERNAME, and NEO4J_PASSWORD are set."
+            )
+        
+        # Test connection
+        test_result = graphdb.send_query("RETURN 'Neo4j is ready!' as message")
+        if test_result["status"] == "error":
+            return tool_error(f"Neo4j connection test failed: {test_result.get('error_message', 'Unknown error')}")
+        
+        # 3. Get data directory
+        data_dir = get_data_directory()
+        file_path = data_dir / file_name
+        
+        if not file_path.exists():
+            return tool_error(f"File not found: {file_name} (looked in {data_dir})")
+        
+        # 4. Process file
+        logger.info(f"Processing single file: {file_name}")
+        file_result = _process_markdown_file(
+            file_path,
+            approved_entities,
+            approved_facts,
+            graphdb
+        )
+        
+        if "error" in file_result:
+            return tool_error(f"Error processing {file_name}: {file_result['error']}")
+        
+        # 5. Track in audit trail
+        audit_trail = tool_context.state.get(INGESTION_AUDIT_TRAIL, [])
+        audit_trail.append({
+            "action": "knowledge_extraction_single",
+            "file": file_name,
+            "result": file_result
+        })
+        tool_context.state[INGESTION_AUDIT_TRAIL] = audit_trail
+        
+        logger.info(
+            f"File {file_name} processed: "
+            f"{file_result.get('nodes_created', 0)} nodes, "
+            f"{file_result.get('relationships_created', 0)} relationships extracted"
+        )
+        
+        return tool_success("extraction_result", {
+            "status": "completed",
+            "file": file_name,
+            "result": file_result
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing single file: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return tool_error(f"Error processing single file: {str(e)}")
 
 
 def execute_knowledge_extraction(tool_context: ToolContext) -> Dict[str, Any]:
@@ -689,6 +837,8 @@ def execute_knowledge_extraction(tool_context: ToolContext) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error executing knowledge extraction: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return tool_error(f"Error executing knowledge extraction: {str(e)}")
 
 
@@ -704,10 +854,9 @@ def get_extraction_progress(tool_context: ToolContext) -> Dict[str, Any]:
     """
     audit_trail = tool_context.state.get(INGESTION_AUDIT_TRAIL, [])
     
-    extraction_actions = [a for a in audit_trail if a.get("action") == "knowledge_extraction"]
+    extraction_actions = [a for a in audit_trail if a.get("action") in ["knowledge_extraction", "knowledge_extraction_single"]]
     
     return tool_success("extraction_progress", {
         "total_actions": len(extraction_actions),
         "extraction_trail": extraction_actions
     })
-
