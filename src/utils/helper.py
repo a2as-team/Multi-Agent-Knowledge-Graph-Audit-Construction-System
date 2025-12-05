@@ -14,10 +14,11 @@ from google.adk.sessions import InMemorySessionService, Session
 from google.adk.runners import Runner
 
 try:
-    from litellm import RateLimitError
+    from litellm import RateLimitError, InternalServerError
 except ImportError:
     # Fallback if litellm is not available
     RateLimitError = Exception
+    InternalServerError = Exception
 
 from src.utils.logger import logger
 from src.utils.config import (
@@ -233,22 +234,54 @@ class AgentCaller:
                     # If it's a different ValueError, re-raise it
                     raise
                 
+            except InternalServerError as e:
+                # Catch 503 errors (server overloaded) and other internal server errors
+                retry_count += 1
+                if retry_count > MAX_RETRIES_ON_RATE_LIMIT:
+                    logger.error(f"Max retries ({MAX_RETRIES_ON_RATE_LIMIT}) exceeded for internal server error (503)")
+                    raise
+                
+                # Try to extract retry delay from error message
+                extracted_delay = extract_retry_delay_from_error(e)
+                
+                if extracted_delay:
+                    wait_time = extracted_delay
+                    logger.warning(
+                        f"🔥 Server overload error (503) encountered (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
+                        f"Using exact retry delay from API: {wait_time:.2f} seconds..."
+                    )
+                else:
+                    # Use exponential backoff for server overload errors
+                    wait_time = GEMINI_FREE_TIER_WAIT_TIME * (RETRY_BACKOFF_MULTIPLIER ** (retry_count - 1))
+                    logger.warning(
+                        f"🔥 Server overload error (503) encountered (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
+                        f"API message: '{str(e)[:100]}...' Retrying after {wait_time:.2f} seconds..."
+                    )
+                
+                await asyncio.sleep(wait_time)
+                
             except Exception as e:
-                # Check if it's a RateLimitError wrapped in another exception
+                # Check if it's a retryable error wrapped in another exception
                 error_str = str(e).lower()
                 
-                # Check for rate limit errors OR "No message in response" error (which often indicates rate limiting)
+                # Check for rate limit errors OR "No message in response" error OR server overload (503)
                 is_rate_limit = "ratelimit" in error_str or "rate limit" in error_str or "429" in error_str
                 is_empty_response = "no message in response" in error_str or "empty response" in error_str
+                is_server_overload = "503" in error_str or "overloaded" in error_str or "unavailable" in error_str
                 
-                if is_rate_limit or is_empty_response:
+                if is_rate_limit or is_empty_response or is_server_overload:
                     retry_count += 1
                     if retry_count > MAX_RETRIES_ON_RATE_LIMIT:
                         logger.error(f"Max retries ({MAX_RETRIES_ON_RATE_LIMIT}) exceeded for rate limit error")
                         raise
                     
                     # Determine error type for logging
-                    error_type = "Rate limit error" if is_rate_limit else "Empty API response error (likely rate limiting)"
+                    if is_rate_limit:
+                        error_type = "Rate limit error"
+                    elif is_empty_response:
+                        error_type = "Empty API response error (likely rate limiting)"
+                    else:
+                        error_type = "Server overload error (503)"
                     
                     # Try to extract exact retry delay from error message
                     extracted_delay = extract_retry_delay_from_error(e)
