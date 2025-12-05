@@ -227,10 +227,13 @@ if st.sidebar.button("🗑️ Clear Neo4j Database", disabled=not clear_confirme
             return response
         
         try:
-            with st.sidebar.spinner("Clearing Neo4j..."):
-                result = asyncio.run(clear_db())
-                st.sidebar.success("✅ " + result)
-                st.sidebar.info("💡 You can now rebuild the graph without duplicates")
+            # Use status message in sidebar since spinner doesn't work there
+            status_placeholder = st.sidebar.empty()
+            status_placeholder.info("🔄 Clearing Neo4j...")
+            result = asyncio.run(clear_db())
+            status_placeholder.empty()
+            st.sidebar.success("✅ " + result)
+            st.sidebar.info("💡 You can now rebuild the graph without duplicates")
         except Exception as e:
             st.sidebar.error(f"❌ Failed to clear: {e}")
     else:
