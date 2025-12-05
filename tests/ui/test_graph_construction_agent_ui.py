@@ -119,18 +119,20 @@ with st.sidebar.expander("View/Edit Construction Plan"):
     },
     "CREATED_BY_rel": {
         "construction_type": "relationship",
+        "source_file": "artwork_artist.csv",
         "relationship_type": "CREATED_BY",
         "from_node_label": "Artwork",
         "to_node_label": "Artist",
-        "from_node_column": "artist_id",
+        "from_node_column": "artwork_id",
         "to_node_column": "artist_id"
     },
     "LOCATED_AT_rel": {
         "construction_type": "relationship",
+        "source_file": "artwork_location.csv",
         "relationship_type": "LOCATED_AT",
         "from_node_label": "Artwork",
         "to_node_label": "Location",
-        "from_node_column": "location_id",
+        "from_node_column": "artwork_id",
         "to_node_column": "location_id"
     }
 }""",

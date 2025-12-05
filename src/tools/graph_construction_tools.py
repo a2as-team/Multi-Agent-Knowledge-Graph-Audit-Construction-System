@@ -269,6 +269,9 @@ def get_neo4j_import_directory(tool_context: ToolContext) -> Dict[str, Any]:
     """
     Get the Neo4j import directory where CSV files should be placed.
     
+    Also attempts to copy files from local neo4j_import/ directory to Docker container
+    if Neo4j is running in Docker.
+    
     Args:
         tool_context: ADK ToolContext
     
@@ -281,6 +284,50 @@ def get_neo4j_import_directory(tool_context: ToolContext) -> Dict[str, Any]:
             return tool_error("Neo4j connection not available")
         
         result = graphdb.get_import_directory()
+        
+        # Try to copy files from local neo4j_import/ to Docker container
+        try:
+            import subprocess
+            from pathlib import Path
+            
+            project_root = Path(__file__).parent.parent.parent
+            local_import_dir = project_root / "neo4j_import"
+            
+            if local_import_dir.exists():
+                # Check if Neo4j is running in Docker
+                docker_check = subprocess.run(
+                    ["docker", "ps", "--filter", "name=neo4j", "--format", "{{.Names}}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                if docker_check.returncode == 0 and docker_check.stdout.strip():
+                    container_name = docker_check.stdout.strip()
+                    csv_files = list(local_import_dir.glob("*.csv"))
+                    
+                    if csv_files:
+                        logger.info(f"Found {len(csv_files)} CSV files in local directory, copying to Docker container...")
+                        for csv_file in csv_files:
+                            try:
+                                subprocess.run(
+                                    ["docker", "cp", str(csv_file), f"{container_name}:/var/lib/neo4j/import/"],
+                                    check=True,
+                                    capture_output=True,
+                                    timeout=30
+                                )
+                                logger.info(f"Copied {csv_file.name} to Neo4j container")
+                            except subprocess.TimeoutExpired:
+                                logger.warning(f"Timeout copying {csv_file.name}")
+                            except subprocess.CalledProcessError as e:
+                                logger.warning(f"Failed to copy {csv_file.name}: {e}")
+                            except FileNotFoundError:
+                                # Docker command not available, skip
+                                break
+        except Exception as e:
+            # Non-critical - just log and continue
+            logger.debug(f"Could not auto-copy files to Docker: {e}")
+        
         return result
     except Exception as e:
         return tool_error(f"Error getting Neo4j import directory: {str(e)}")
