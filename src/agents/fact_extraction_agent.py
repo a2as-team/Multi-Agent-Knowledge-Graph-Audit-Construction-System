@@ -29,8 +29,6 @@ from src.tools.fact_extraction_tools import (
     add_proposed_facts_batch,
     remove_proposed_fact,
     get_proposed_facts,
-    set_critic_feedback,
-    get_critic_feedback,
     approve_proposed_facts
 )
 
@@ -62,15 +60,10 @@ for a user's goal.
 Your task is to propose a clean, deduplicated set of fact types (relationship triples)
 that represent relationships found in the text.
 
-**CRITICAL: If this is a refinement iteration (check session state for 'critic_feedback'):**
-1. FIRST: Use 'get_critic_feedback' tool to read the structured feedback
-2. CHECK: If status is "retry", there are issues that MUST be addressed
-3. READ: The 'issues' list contains specific problems to fix
-4. ACT: Use 'remove_proposed_fact' to remove problematic fact types by their predicate label
-5. VERIFY: After removing, check 'get_proposed_facts' to confirm the issue is resolved
-6. DO NOT re-propose the same problematic facts that were just removed
-
-If no critic feedback exists yet, proceed with initial proposal.
+Consider feedback if it is available:
+<feedback>
+{feedback}
+</feedback>
 """
 
 fact_proposal_agent_hints = """
@@ -128,26 +121,17 @@ Important considerations:
 """
 
 fact_proposal_agent_chain_of_thought_directions = """
-**STEP 0: CHECK FOR CRITIC FEEDBACK (DO THIS FIRST!)**
-- BEFORE doing anything else, call 'get_critic_feedback' to check if there's feedback from a previous iteration
-- If the feedback status is "retry" and there are issues:
-  a) READ each issue carefully
-  b) For each problematic fact mentioned, call 'remove_proposed_fact' with the predicate_label
-  c) VERIFY removal by calling 'get_proposed_facts' to confirm the fact is gone
-  d) After addressing ALL issues, call 'get_proposed_facts' again to see what remains
-  e) If the critic asked you to remove a fact, DO NOT re-propose it
-- If there's no feedback or status is "valid", proceed with initial proposal
-
-**Prepare for the task:**
+Prepare for the task:
 - use the 'get_approved_user_goal' tool to get the user goal
 - use the 'get_approved_files' tool to get the list of approved markdown files
 - use the 'get_approved_entities' tool to get the list of approved entity types
 - use the 'get_well_known_relationships' tool to get existing relationships from structured data
+- use the 'get_proposed_facts' tool to see what facts are currently proposed
 
-**Think step by step:**
+Think step by step:
 1. Review the approved entity types to understand what subjects and objects are available
 2. Review the existing relationships from structured data to know what to AVOID proposing
-3. Check if this is a refinement iteration (see STEP 0 above)
+3. If feedback is provided, address the issues by using 'remove_proposed_fact' for problematic predicates
 4. Sample ONE markdown file using the 'sample_file' tool
 5. Identify ALL relevant fact types from that file, noting any synonym predicates
 6. Filter out any facts that duplicate or overlap with existing relationships from structured data
@@ -155,15 +139,14 @@ fact_proposal_agent_chain_of_thought_directions = """
 8. Check for inverse relationships within this file and choose ONE direction to represent each relationship
 9. Call 'add_proposed_facts_batch' with ALL deduplicated, non-redundant facts from that file in ONE batch call
 10. Repeat steps 4-9 for each remaining file (sample, identify, filter, consolidate, batch add)
-11. After processing all files, you're done - the critic will review for cross-file issues
+11. After processing all files, use 'get_proposed_facts' to present the current set of fact types
 
 **CRITICAL**: 
-- ALWAYS check for critic feedback FIRST using 'get_critic_feedback' before doing anything
-- If critic identified issues, you MUST address them by removing the problematic facts
 - Always check existing relationships from structured data FIRST using 'get_well_known_relationships'
 - Do NOT propose fact types that duplicate existing structured relationships
 - Always use 'add_proposed_facts_batch' instead of calling 'add_proposed_fact' multiple times
 - Always consolidate similar predicates WITHIN each file before adding them
+- If feedback mentions removing a fact, use 'remove_proposed_fact' with the exact predicate_label
 - The critic will handle cross-file consolidation - focus on per-file quality
 """
 
@@ -250,18 +233,15 @@ You are looking for systematic issues with the proposed fact types, not subjecti
 """
 
 fact_critic_agent_chain_of_thought_directions = """
-**YOUR ROLE: You are a REVIEWER ONLY. You provide feedback but DO NOT modify facts.**
-- You have access to read-only tools: get_proposed_facts, get_well_known_relationships, get_approved_entities, get_approved_user_goal
-- Your ONLY action tool is: set_critic_feedback (to provide structured feedback)
-- You do NOT have tools to add or remove facts - that's the proposal agent's job
-- DO NOT try to call 'remove_proposed_fact' or 'add_proposed_fact' - you don't have those tools
+Prepare for the task:
+- get the user goal using the 'get_approved_user_goal' tool
+- get the approved entity types using the 'get_approved_entities' tool
+- get existing relationships from structured data using the 'get_well_known_relationships' tool
+- get the proposed fact types using the 'get_proposed_facts' tool
 
-Think step by step:
-1. Use 'get_proposed_facts' to retrieve the proposed fact types
-2. Use 'get_well_known_relationships' to get existing relationships from structured data
-3. Use 'get_approved_entities' to get approved entity types
-4. Use 'get_approved_user_goal' to understand the user's objective
-5. Run through each validation check systematically:
+Think carefully, using tools to perform analysis:
+1. Analyze each proposed fact type systematically
+2. Run through each validation check:
    - Check for duplicate fact types (same subject, predicate, object)
    - Check for inverse relationships (A→B and A←B)
    - Check for synonym predicates (different names, same meaning)
@@ -271,26 +251,18 @@ Think step by step:
    - Check relevance to user goal
    - Check for duplicate subject-object pairs (unless semantically distinct)
    - Check all approved entity types are used in at least one relationship
-6. If ALL checks pass:
-   - Call 'set_critic_feedback' ONCE with status="valid" and empty issues list
-   - DO NOT call any other tools after this
-7. If ANY check fails:
-   - Call 'set_critic_feedback' ONCE with status="retry" and detailed issues list
-   - Be specific: list exact fact types (including the predicate_label), explain why they're problematic
-   - DO NOT call any other tools after this
-   
-**CRITICAL**: After calling 'set_critic_feedback', you are DONE. Do not call any other tools.
+3. If the fact types look good and pass all checks, respond with a one word reply: 'valid'
+4. If the fact types have problems, respond with 'retry' and provide feedback as a concise bullet list of problems
 
-**Output format for issues (ALWAYS include the predicate_label in single quotes):**
-Each issue should be a clear, actionable statement with the predicate_label clearly specified:
+**Output format for issues (when responding with 'retry'):**
+Start your response with 'retry' on the first line, then list issues as bullets:
 - "Remove predicate 'predicate_label': (EntityA, predicate_label, EntityB) is a duplicate"
-- "Remove predicate 'acquired_from': (EntityA, acquired_by, EntityB) and (EntityA, acquired_from, EntityB) are inverses - keep 'acquired_by'"
-- "Remove predicate 'predicate2': 'predicate1' and 'predicate2' are synonyms - keep 'predicate1'"
-- "Remove predicate 'new_predicate': overlaps with existing 'EXISTING_RELATIONSHIP'"
-- "Remove predicate 'predicate2': (EntityA, predicate1, EntityB) and (EntityA, predicate2, EntityB) connect same entities - keep 'predicate1'"
-- "Orphaned entity 'EntityX': not used in any relationship. Proposal agent should add a fact using EntityX"
+- "Remove predicate 'featured_in': (Artwork, featured_in, Exhibition) and (Exhibition, features, Artwork) are inverses - keep 'features'"
+- "Remove predicate 'displayed_in': semantically duplicates existing 'LOCATED_AT' relationship"
+- "Remove predicate 'referenced_in': synonym with 'recorded_in' - keep 'recorded_in'"
+- "Orphaned entity 'EntityX': not used in any relationship. Add a fact using EntityX"
 
-**CRITICAL**: Always specify which predicate_label to remove or keep. The proposal agent needs the exact predicate_label string.
+**CRITICAL**: Always specify the exact predicate_label to remove in single quotes.
 """
 
 # Combine all instruction components
@@ -330,23 +302,18 @@ class CheckStatusAndEscalate(BaseAgent):
         iteration += 1
         ctx.session.state["fact_refinement_iteration"] = iteration
         
-        logger.info(f"Fact refinement iteration: {iteration}/{self.MAX_ITERATIONS}")
+        logger.info(f"📊 Fact refinement iteration: {iteration}/{self.MAX_ITERATIONS}")
         
         # Get critic feedback (stored via output_key="feedback")
-        feedback = ctx.session.state.get("feedback", "")
-        
-        # Also check structured feedback from tool (for UI display)
-        critic_feedback = ctx.session.state.get("critic_feedback", {})
-        status = critic_feedback.get("status", "")
-        issues = critic_feedback.get("issues", [])
+        feedback = ctx.session.state.get("feedback", "valid")
+        feedback_str = str(feedback).strip().lower()
         
         # Log the feedback for debugging
-        logger.info(f"📊 Critic status: {status}")
-        if issues:
-            logger.info(f"📋 Critic issues ({len(issues)}): {issues[0][:100] if issues else 'None'}...")
+        logger.info(f"💬 Critic feedback: {feedback_str[:100]}...")
         
-        # Check if feedback indicates valid (either via tool status or feedback text)
-        is_valid = (status == "valid") or ("valid" in str(feedback).lower() and "invalid" not in str(feedback).lower())
+        # Check if feedback indicates valid
+        # Critic responds with "valid" or "retry\n- issues..."
+        is_valid = feedback_str == "valid"
         
         if is_valid:
             # Facts are valid - exit loop
@@ -356,15 +323,10 @@ class CheckStatusAndEscalate(BaseAgent):
             # Max iterations reached - escalate with message
             logger.warning(f"⚠️ Max iterations ({self.MAX_ITERATIONS}) reached - escalating to user")
             
-            if issues:
-                issue_text = "\n".join(f"- {issue}" for issue in issues)
-            else:
-                issue_text = str(feedback) or "Unknown issues"
-            
             # Store escalation message in state for UI
             ctx.session.state["escalation_message"] = (
-                f"⚠️ After {self.MAX_ITERATIONS} refinement iterations, there are still {len(issues)} issue(s):\n\n" +
-                issue_text +
+                f"⚠️ After {self.MAX_ITERATIONS} refinement iterations, there are still issues:\n\n" +
+                str(feedback) +
                 f"\n\n💡 The agent has done its best. Please review and manually address remaining issues."
             )
             
@@ -373,7 +335,7 @@ class CheckStatusAndEscalate(BaseAgent):
         else:
             # Continue loop - pass feedback to proposal agent
             logger.info(f"🔄 Critic requested retry (iteration {iteration}/{self.MAX_ITERATIONS})")
-            logger.info(f"📝 Passing {len(issues)} issue(s) to proposal agent for refinement")
+            logger.info(f"📝 Feedback will be automatically injected into proposal agent via {{feedback}} template")
             # Do not escalate - loop will continue
             yield Event(author=self.name, actions=EventActions(escalate=False))
 
@@ -391,16 +353,14 @@ fact_proposal_agent_tools = [
     add_proposed_fact,
     add_proposed_facts_batch,
     remove_proposed_fact,
-    get_proposed_facts,
-    get_critic_feedback  # To read feedback and address issues in refinement iterations
+    get_proposed_facts
 ]
 
 fact_critic_agent_tools = [
     get_approved_user_goal,
     get_approved_entities,
     get_well_known_relationships,
-    get_proposed_facts,
-    set_critic_feedback
+    get_proposed_facts
 ]
 
 
