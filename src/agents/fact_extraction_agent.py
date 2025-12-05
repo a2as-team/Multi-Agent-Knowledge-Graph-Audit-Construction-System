@@ -417,18 +417,14 @@ fact_proposal_agent = LlmAgent(
     tools=fact_proposal_agent_tools,
 )
 
-# Critic Agent with retry configuration
+# Critic Agent
 fact_critic_agent = LlmAgent(
     name="fact_critic_agent_v1",
     model=llm,
     description="Validates proposed fact types and provides structured feedback.",
     instruction=fact_critic_agent_instruction,
     tools=fact_critic_agent_tools,
-    output_key="feedback",  # The result of calling the critic is placed in the 'feedback' key
-    model_params={
-        "max_output_tokens": 2048,  # Limit response size
-        "temperature": 0.1,  # Lower temperature for more consistent validation
-    }
+    output_key="feedback"  # The result of calling the critic is placed in the 'feedback' key
 )
 
 # Check Status Agent
