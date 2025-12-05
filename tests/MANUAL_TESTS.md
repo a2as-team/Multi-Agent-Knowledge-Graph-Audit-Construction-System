@@ -1458,6 +1458,193 @@ _Test cases to be added..._
 
 ---
 
+## Graph Construction Agent
+
+### Test 1: Agent Initialization
+**Objective:** Verify agent can be initialized with construction plan
+
+**Steps:**
+1. Initialize agent with:
+   - User goal
+   - Approved construction plan (with nodes and relationships)
+2. Start chat: "Please build the graph according to the construction plan"
+
+**Expected:**
+- Agent acknowledges the construction plan
+- Agent checks Neo4j connection
+- Agent reports readiness to proceed
+
+---
+
+### Test 2: Neo4j Connection Check
+**Objective:** Verify agent can check Neo4j connection
+
+**Steps:**
+1. Ensure Neo4j is running
+2. Set NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
+3. Ask: "Check if Neo4j is ready"
+
+**Expected:**
+- Agent calls `check_neo4j_connection`
+- Agent reports connection status
+- If connected: "Neo4j connection is ready"
+- If not: Clear error message with guidance
+
+---
+
+### Test 3: Create Uniqueness Constraints
+**Objective:** Verify agent creates constraints for all node types
+
+**Steps:**
+1. Initialize with construction plan containing 3 node types
+2. Ask: "Create uniqueness constraints for all node types"
+
+**Expected:**
+- Agent calls `create_uniqueness_constraint` for each node type
+- Constraints created: `{label}_{unique_column}_constraint`
+- Agent reports success for each constraint
+- If constraint already exists, agent notes it (IF NOT EXISTS handles this)
+
+---
+
+### Test 4: Load Nodes from CSV
+**Objective:** Verify agent loads nodes correctly
+
+**Steps:**
+1. Place CSV files in Neo4j import directory
+2. Initialize with construction plan
+3. Ask: "Load all nodes from the CSV files"
+
+**Expected:**
+- Agent calls `load_nodes_from_csv` for each node construction
+- Nodes loaded using MERGE on unique_column_name
+- Agent reports count of nodes loaded per file
+- Properties are set correctly
+- Audit trail updated with loading actions
+
+**Verification:**
+- Check Neo4j: `MATCH (n:Artwork) RETURN count(n)`
+- Verify properties are set: `MATCH (n:Artwork) RETURN n LIMIT 5`
+
+---
+
+### Test 5: Load Relationships from CSV
+**Objective:** Verify agent loads relationships correctly
+
+**Steps:**
+1. Ensure nodes are already loaded (from Test 4)
+2. Ask: "Load all relationships from the CSV files"
+
+**Expected:**
+- Agent calls `load_relationships_from_csv` for each relationship construction
+- Relationships created using MATCH + MERGE
+- Agent reports count of relationships loaded per file
+- Relationship properties are set if specified
+- Audit trail updated
+
+**Verification:**
+- Check Neo4j: `MATCH ()-[r:CREATED_BY]->() RETURN count(r)`
+- Verify relationships: `MATCH (a:Artwork)-[r:CREATED_BY]->(b:Artist) RETURN a, r, b LIMIT 5`
+
+---
+
+### Test 6: Full Graph Construction Workflow
+**Objective:** Verify complete end-to-end graph construction
+
+**Steps:**
+1. Initialize with complete construction plan (nodes + relationships)
+2. Ensure CSV files are in Neo4j import directory
+3. Ask: "Please build the complete graph according to the construction plan"
+
+**Expected:**
+- Agent follows complete workflow:
+  1. Checks Neo4j connection
+  2. Gets import directory
+  3. Creates all uniqueness constraints
+  4. Loads all nodes
+  5. Loads all relationships
+  6. Reports final summary
+- Final summary shows:
+  - Total nodes loaded by type
+  - Total relationships loaded by type
+  - Any errors or warnings
+
+**Verification:**
+- Check graph structure: `CALL db.schema.visualization()`
+- Verify node counts match CSV row counts
+- Verify relationships connect correct nodes
+
+---
+
+### Test 7: Handle Missing CSV Files
+**Objective:** Verify agent handles missing files gracefully
+
+**Steps:**
+1. Initialize with construction plan
+2. Remove one CSV file from import directory
+3. Ask: "Build the graph"
+
+**Expected:**
+- Agent attempts to load the file
+- Error reported for missing file
+- Agent continues with other files
+- Clear error message indicating which file is missing
+
+---
+
+### Test 8: Ingestion Progress Tracking
+**Objective:** Verify audit trail is maintained
+
+**Steps:**
+1. Build graph (from Test 6)
+2. Ask: "Show me the ingestion progress"
+
+**Expected:**
+- Agent calls `get_ingestion_progress`
+- Audit trail shows all actions:
+  - Constraint creation (if tracked)
+  - Node loading actions with counts
+  - Relationship loading actions with counts
+- Progress summary shows totals
+
+---
+
+### Test 9: Pre-Ingestion Audit Resolutions
+**Objective:** Verify agent acknowledges audit resolutions
+
+**Steps:**
+1. Initialize with construction plan
+2. Add audit resolutions to session state (from pre-ingestion audit)
+3. Ask: "Build the graph and apply audit resolutions"
+
+**Expected:**
+- Agent retrieves audit resolutions
+- Agent acknowledges resolutions exist
+- Note: Full resolution application (skipping records, etc.) may require
+  additional implementation in load functions
+
+**Current Status:**
+- Agent can retrieve resolutions
+- Resolution application during loading is a future enhancement
+
+---
+
+### Test 10: Duplicate Handling with MERGE
+**Objective:** Verify MERGE handles duplicates correctly
+
+**Steps:**
+1. Create CSV with duplicate unique IDs
+2. Load nodes twice
+3. Check Neo4j
+
+**Expected:**
+- First load: All nodes created
+- Second load: MERGE updates existing nodes (doesn't create duplicates)
+- Node count remains same (no duplicates)
+- Properties updated if changed
+
+---
+
 ## Audit Query Agent
 
 _Test cases to be added..._
