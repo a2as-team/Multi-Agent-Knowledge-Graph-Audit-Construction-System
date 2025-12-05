@@ -1,0 +1,11 @@
+location_id,name,building,room
+L001,Orangerie Museum,Orangerie,Main Hall
+L002,Museum of Modern Art,MoMA,Gallery 5
+L003,Rijksmuseum,Rijks,Gallery C
+L004,Van Gogh Museum,VanGogh,Room 2
+L005,Dali Museum,Dali,Exhibit A
+L006,Storage Depot,Depot,Box 12
+L007,O'Keeffe Wing,OKeeffe,Room 1
+L008,Munch Gallery,Munch,Main Exhibit
+L009,Dali Museum,Dali,
+L010,Offsite Storage,Offsite,Storage Room 3

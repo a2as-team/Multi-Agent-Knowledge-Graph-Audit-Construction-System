@@ -22,7 +22,8 @@ from src.tools.graph_construction_tools import (
     load_relationships_from_csv,
     get_ingestion_progress,
     get_pre_ingestion_audit_resolutions,
-    clear_neo4j_data
+    clear_neo4j_data,
+    execute_construction_plan
 )
 
 # Ignore warnings
@@ -142,18 +143,42 @@ based on unique identifiers. However, for clean testing:
 
 agent_chain_of_thought = """
 AVAILABLE TOOLS (use these exact names - no other functions exist):
+- execute_construction_plan: **RECOMMENDED** Execute the entire construction plan in one go (reduces API calls from 15-20+ to 1-2)
 - get_approved_user_goal: Get the user's goal
 - get_approved_construction_plan: Get the construction plan to execute
 - check_neo4j_connection: Verify Neo4j is available
 - get_neo4j_import_directory: Get the directory where CSV files should be
 - get_pre_ingestion_audit_resolutions: Get audit resolutions to apply
-- create_uniqueness_constraint: Create constraint for a node label/property
-- load_nodes_from_csv: Load nodes from a CSV file
-- load_relationships_from_csv: Load relationships from a CSV file
+- create_uniqueness_constraint: Create constraint for a node label/property (use execute_construction_plan instead)
+- load_nodes_from_csv: Load nodes from a CSV file (use execute_construction_plan instead)
+- load_relationships_from_csv: Load relationships from a CSV file (use execute_construction_plan instead)
 - get_ingestion_progress: Get current ingestion progress
 - clear_neo4j_data: Clear all data from Neo4j (use before rebuilding for testing)
 
-**Workflow:**
+**OPTIMIZED WORKFLOW (Recommended - reduces API calls by ~90%):**
+
+1. **Quick Check** (optional)
+   - Call check_neo4j_connection to verify Neo4j is available
+   - If connection fails, inform user and stop
+
+2. **Execute Construction Plan** (ONE CALL - does everything)
+   - Call execute_construction_plan
+   - This tool automatically:
+     * Gets the construction plan from session state
+     * Verifies Neo4j connection
+     * Creates ALL uniqueness constraints
+     * Loads ALL nodes from CSV files
+     * Loads ALL relationships from CSV files
+     * Applies pre-ingestion audit resolutions
+     * Returns comprehensive results
+
+3. **Report Results**
+   - Present the execution results to the user
+   - Show summary: total nodes, relationships, constraints created
+   - Report any failures or warnings
+   - Confirm graph construction is complete
+
+**ALTERNATIVE WORKFLOW (if execute_construction_plan is not available):**
 
 1. **Preparation**
    - Get the approved construction plan
@@ -162,36 +187,23 @@ AVAILABLE TOOLS (use these exact names - no other functions exist):
    - Check for pre-ingestion audit resolutions
 
 2. **Create Constraints**
-   - For each node construction in the plan:
-     * Extract label and unique_column_name
-     * Call create_uniqueness_constraint
-     * Report success or note if constraint already exists
+   - For each node construction: call create_uniqueness_constraint
 
 3. **Load Nodes**
-   - For each node construction:
-     * Extract source_file, label, unique_column_name, properties
-     * Call load_nodes_from_csv
-     * Report how many nodes were loaded
-   - Process all node constructions before relationships
+   - For each node construction: call load_nodes_from_csv
 
 4. **Load Relationships**
-   - For each relationship construction:
-     * Extract source_file, relationship_type, from/to node info, properties
-     * Call load_relationships_from_csv
-     * Report how many relationships were loaded
+   - For each relationship construction: call load_relationships_from_csv
 
 5. **Finalize**
    - Get ingestion progress summary
-   - Report total nodes and relationships loaded
-   - Confirm graph construction is complete
-   - Provide any warnings or next steps
+   - Report results
 
 **CRITICAL:**
-- Always check Neo4j connection first
-- Create constraints before loading nodes
-- Load all nodes before loading relationships
-- Use exact tool names listed above
-- Report progress after each major step
+- **ALWAYS prefer execute_construction_plan** - it's faster and uses fewer API calls
+- If execute_construction_plan fails, you can fall back to individual tools
+- Always check Neo4j connection first (or let execute_construction_plan do it)
+- Report results clearly to the user
 - Handle errors gracefully and inform user
 """
 
@@ -210,14 +222,15 @@ agent_instruction = f"""
 # ============================================================================
 
 agent_tools = [
+    execute_construction_plan,  # Add batch execution tool first (recommended)
     get_approved_user_goal,
     get_approved_construction_plan,
     check_neo4j_connection,
     get_neo4j_import_directory,
     get_pre_ingestion_audit_resolutions,
-    create_uniqueness_constraint,
-    load_nodes_from_csv,
-    load_relationships_from_csv,
+    create_uniqueness_constraint,  # Keep for backward compatibility
+    load_nodes_from_csv,  # Keep for backward compatibility
+    load_relationships_from_csv,  # Keep for backward compatibility
     get_ingestion_progress,
     clear_neo4j_data
 ]

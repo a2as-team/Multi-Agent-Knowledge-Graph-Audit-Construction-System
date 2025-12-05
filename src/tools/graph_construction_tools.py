@@ -619,6 +619,239 @@ def get_ingestion_progress(tool_context: ToolContext) -> Dict[str, Any]:
     })
 
 
+def execute_construction_plan(tool_context: ToolContext) -> Dict[str, Any]:
+    """
+    Execute the entire construction plan in one deterministic operation.
+    
+    This tool reduces API calls from 15-20+ to just 1-2 by batching all operations:
+    1. Creates all uniqueness constraints
+    2. Loads all nodes from CSV files
+    3. Loads all relationships from CSV files
+    
+    Args:
+        tool_context: ADK ToolContext
+    
+    Returns:
+        Dictionary with status and comprehensive execution results
+    """
+    try:
+        # 1. Get prerequisites
+        construction_plan = tool_context.state.get(APPROVED_CONSTRUCTION_PLAN, {})
+        if not construction_plan:
+            return tool_error(
+                "Approved construction plan not found. "
+                "Please ensure the schema proposal agent has been run and approved."
+            )
+        
+        # 2. Check Neo4j connection
+        graphdb = get_graphdb()
+        if graphdb is None:
+            return tool_error(
+                "Neo4j connection not available. "
+                "Please ensure NEO4J_URI, NEO4J_USERNAME, and NEO4J_PASSWORD are set."
+            )
+        
+        # Test connection
+        test_result = graphdb.send_query("RETURN 'Neo4j is ready!' as message")
+        if test_result["status"] == "error":
+            return tool_error(f"Neo4j connection test failed: {test_result.get('error_message', 'Unknown error')}")
+        
+        # Initialize results tracking
+        results = {
+            "constraints_created": [],
+            "constraints_failed": [],
+            "nodes_loaded": [],
+            "nodes_failed": [],
+            "relationships_loaded": [],
+            "relationships_failed": [],
+            "total_nodes": 0,
+            "total_relationships": 0,
+            "total_resolutions_applied": 0
+        }
+        
+        # Separate node and relationship constructions
+        node_constructions = []
+        relationship_constructions = []
+        
+        for construction_name, construction_data in construction_plan.items():
+            if construction_data.get("construction_type") == "node":
+                node_constructions.append((construction_name, construction_data))
+            elif construction_data.get("construction_type") == "relationship":
+                relationship_constructions.append((construction_name, construction_data))
+        
+        # 3. Create all uniqueness constraints
+        logger.info(f"Creating {len(node_constructions)} uniqueness constraints...")
+        for construction_name, construction_data in node_constructions:
+            label = construction_data.get("label")
+            unique_property_key = construction_data.get("unique_column_name")
+            
+            if not label or not unique_property_key:
+                results["constraints_failed"].append({
+                    "construction": construction_name,
+                    "error": "Missing label or unique_column_name"
+                })
+                continue
+            
+            try:
+                constraint_name = f"{label}_{unique_property_key}_constraint"
+                query = f"""CREATE CONSTRAINT `{constraint_name}` IF NOT EXISTS
+                FOR (n:`{label}`)
+                REQUIRE n.`{unique_property_key}` IS UNIQUE"""
+                
+                result = graphdb.send_query(query)
+                
+                if result["status"] == "error":
+                    results["constraints_failed"].append({
+                        "construction": construction_name,
+                        "label": label,
+                        "property": unique_property_key,
+                        "error": result.get("error_message", "Unknown error")
+                    })
+                else:
+                    results["constraints_created"].append({
+                        "construction": construction_name,
+                        "constraint_name": constraint_name,
+                        "label": label,
+                        "property": unique_property_key
+                    })
+                    logger.info(f"Created uniqueness constraint: {constraint_name} for {label}.{unique_property_key}")
+            except Exception as e:
+                results["constraints_failed"].append({
+                    "construction": construction_name,
+                    "error": str(e)
+                })
+        
+        # 4. Load all nodes
+        logger.info(f"Loading {len(node_constructions)} node types...")
+        for construction_name, construction_data in node_constructions:
+            source_file = construction_data.get("source_file")
+            label = construction_data.get("label")
+            unique_column_name = construction_data.get("unique_column_name")
+            properties = construction_data.get("properties", [])
+            
+            if not all([source_file, label, unique_column_name]):
+                results["nodes_failed"].append({
+                    "construction": construction_name,
+                    "error": "Missing required fields (source_file, label, or unique_column_name)"
+                })
+                continue
+            
+            try:
+                # Use existing load_nodes_from_csv logic
+                node_result = load_nodes_from_csv(
+                    source_file, label, unique_column_name, properties, tool_context
+                )
+                
+                if node_result["status"] == "error":
+                    results["nodes_failed"].append({
+                        "construction": construction_name,
+                        "file": source_file,
+                        "label": label,
+                        "error": node_result.get("error_message", "Unknown error")
+                    })
+                else:
+                    loading_result = node_result.get("loading_result", {})
+                    nodes_count = loading_result.get("nodes_loaded", 0)
+                    resolutions_count = loading_result.get("resolutions_applied", 0)
+                    
+                    results["nodes_loaded"].append({
+                        "construction": construction_name,
+                        "file": source_file,
+                        "label": label,
+                        "nodes_loaded": nodes_count,
+                        "resolutions_applied": resolutions_count
+                    })
+                    results["total_nodes"] += nodes_count
+                    results["total_resolutions_applied"] += resolutions_count
+            except Exception as e:
+                results["nodes_failed"].append({
+                    "construction": construction_name,
+                    "error": str(e)
+                })
+        
+        # 5. Load all relationships
+        logger.info(f"Loading {len(relationship_constructions)} relationship types...")
+        for construction_name, construction_data in relationship_constructions:
+            source_file = construction_data.get("source_file")
+            relationship_type = construction_data.get("relationship_type")
+            from_node_label = construction_data.get("from_node_label")
+            from_node_column = construction_data.get("from_node_column")
+            to_node_label = construction_data.get("to_node_label")
+            to_node_column = construction_data.get("to_node_column")
+            properties = construction_data.get("properties", [])
+            
+            if not all([source_file, relationship_type, from_node_label, from_node_column, 
+                       to_node_label, to_node_column]):
+                results["relationships_failed"].append({
+                    "construction": construction_name,
+                    "error": "Missing required fields"
+                })
+                continue
+            
+            try:
+                # Use existing load_relationships_from_csv logic
+                rel_result = load_relationships_from_csv(
+                    source_file, relationship_type, from_node_label, from_node_column,
+                    to_node_label, to_node_column, properties, tool_context
+                )
+                
+                if rel_result["status"] == "error":
+                    results["relationships_failed"].append({
+                        "construction": construction_name,
+                        "file": source_file,
+                        "relationship_type": relationship_type,
+                        "error": rel_result.get("error_message", "Unknown error")
+                    })
+                else:
+                    loading_result = rel_result.get("loading_result", {})
+                    rels_count = loading_result.get("relationships_loaded", 0)
+                    
+                    results["relationships_loaded"].append({
+                        "construction": construction_name,
+                        "file": source_file,
+                        "relationship_type": relationship_type,
+                        "relationships_loaded": rels_count
+                    })
+                    results["total_relationships"] += rels_count
+            except Exception as e:
+                results["relationships_failed"].append({
+                    "construction": construction_name,
+                    "error": str(e)
+                })
+        
+        # 6. Compile final summary
+        summary = {
+            "status": "completed",
+            "constraints": {
+                "created": len(results["constraints_created"]),
+                "failed": len(results["constraints_failed"])
+            },
+            "nodes": {
+                "loaded": len(results["nodes_loaded"]),
+                "failed": len(results["nodes_failed"]),
+                "total_count": results["total_nodes"]
+            },
+            "relationships": {
+                "loaded": len(results["relationships_loaded"]),
+                "failed": len(results["relationships_failed"]),
+                "total_count": results["total_relationships"]
+            },
+            "resolutions_applied": results["total_resolutions_applied"],
+            "details": results
+        }
+        
+        logger.info(
+            f"Construction plan execution complete: "
+            f"{results['total_nodes']} nodes, {results['total_relationships']} relationships loaded"
+        )
+        
+        return tool_success("execution_result", summary)
+        
+    except Exception as e:
+        logger.error(f"Error executing construction plan: {str(e)}")
+        return tool_error(f"Error executing construction plan: {str(e)}")
+
+
 def clear_neo4j_data(tool_context: ToolContext) -> Dict[str, Any]:
     """
     Clear all data from the Neo4j graph database.

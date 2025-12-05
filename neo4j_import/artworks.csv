@@ -1,0 +1,26 @@
+artwork_id,title,creation_date,dimensions,medium_id,artist_id,location_id
+AW001,Starry Night,1889,73.7cm x 92.1cm,M001,A009,L001
+AW002,Water Lilies,1906,200cm x 180cm,M002,A001,L002
+AW003,Guernica,1937,349cm x 776cm,M003,A002,L003
+AW004,Mona Lisa,1503,77cm x 53cm,M004,A004,L004
+AW005,Self Portrait,1660,65cm x 55cm,M002,A006,L005
+AW006,The Scream,1893,91cm x 73cm,M001,A008,L006
+AW007,The Two Fridas,1939,173cm x 173cm,M002,A005,L007
+AW008,The Persistence of Memory,1931,24cm x 33cm,M003,A010,L008
+AW009,Untitled Artwork,,80cm x 40cm,M001,,L009
+AW010,Unknown Piece,2001,50cm x 50cm,M002,,L002
+AW011,Landscape Study,1998,120cm x 90cm,M004,A016,L001
+AW012,Portrait Study,2010,100cm x 75cm,M005,A016,L003
+AW013,Guernica,1937,349cm x 776cm,M003,A012,L003
+AW013,Guernica,1937,349cm x 776cm,M003,A002,L003
+AW014,Water Lilies,1906,200cm x 180cm,M002,,L002
+AW015,Morning Field,1999,120cm x 100cm,M004,A016,L007
+AW016,Sunset Over Hills,2005,140cm x 120cm,M005,A016,L007
+AW017,Old Town Street,1988,90cm x 60cm,M006,A003,L005
+AW018,Mona Lisa,1503,77cm x 53cm,M004,A014,L004
+AW019,Still Life with Apples,1890,45cm x 60cm,M006,A009,L006
+AW020,Still Life with Apples,1890,45cm x 60cm,M006,A009,L006
+AW021,Abstract Form,2003,110cm x 110cm,M005,A016,L003
+AW022,Abstract Form,2003,110cm x 110cm,M005,A016,L003
+AW023,Morning Field,1999,120cm x 100cm,M004,,L007
+AW024,Untitled Blue Composition,2015,130cm x 130cm,M001,A015,L002
