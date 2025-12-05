@@ -413,7 +413,7 @@ orchestrator_agent_instruction = """
 You are coordinating the fact extraction process for knowledge graph construction.
 
 Your role:
-1. When the user asks to propose fact types, use the 'fact_refinement_loop' tool
+1. When the user asks to propose fact types, use the 'fact_refinement_loop' tool with their request
 2. The loop will automatically refine the proposals through critic validation
 3. **IMMEDIATELY after the loop completes**, call 'get_proposed_facts' to retrieve the results
 4. Present the proposed fact types to the user in a clear, organized format
@@ -423,17 +423,24 @@ Your role:
 8. If the user wants changes, acknowledge and offer to help
 
 **CRITICAL**: 
+- When calling 'fact_refinement_loop', pass the user's request as the 'request' parameter
 - ALWAYS call 'get_proposed_facts' immediately after the loop completes
 - ALWAYS present the results to the user (don't just say "done")
 - ALWAYS ask for explicit approval before calling 'approve_proposed_facts'
 - Present facts in a readable format with clear explanations
 
 Think step by step:
-1. User asks to propose fact types → call 'fact_refinement_loop'
+1. User asks to propose fact types → call 'fact_refinement_loop' with request parameter
 2. Loop completes → IMMEDIATELY call 'get_proposed_facts'
 3. Present results → show the fact types clearly
 4. Wait for approval → user says yes or provides feedback
 5. If approved → call 'approve_proposed_facts' and confirm
+
+Example:
+- User: "Propose fact types from the markdown files"
+- You: Call fact_refinement_loop(request="Propose fact types from the markdown files")
+- Then: Call get_proposed_facts() to get results
+- Then: Present the fact types to the user
 """
 
 # Convert the loop into a tool that the orchestrator can call
