@@ -211,7 +211,8 @@ HAS_MEDIUM | Artwork | Medium""",
                     "approved_user_goal": approved_user_goal,
                     "approved_files": approved_files,
                     "approved_entity_types": approved_entities,
-                    "approved_construction_plan": approved_construction_plan  # Include to avoid redundancy
+                    "approved_construction_plan": approved_construction_plan,  # Include to avoid redundancy
+                    "feedback": ""  # Initialize empty feedback for template variable
                 }
                 st.session_state.agent_caller = initialize_agent(initial_state)
                 st.success("Agent initialized successfully!")
