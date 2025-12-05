@@ -437,13 +437,9 @@ Think step by step:
 """
 
 # Convert the loop into a tool that the orchestrator can call
-from google.adk.tools import tool_from_agent
+from google.adk.tools import agent_tool
 
-fact_refinement_loop_tool = tool_from_agent(
-    fact_refinement_loop,
-    name="fact_refinement_loop",
-    description="Analyzes markdown files and proposes fact types through an iterative refinement process with automatic critic validation"
-)
+fact_refinement_loop_tool = agent_tool.AgentTool(fact_refinement_loop)
 
 # Create orchestrator agent
 orchestrator_agent = LlmAgent(
