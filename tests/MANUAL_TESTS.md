@@ -820,7 +820,81 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 
 ---
 
-### Test 10: Test Session Reset
+### Test 10: Duplicate Subject-Object Pairs Validation
+
+**Objective**: Verify that the critic detects when multiple predicates connect the same entity types and flags them unless semantically distinct.
+
+**Steps**:
+1. Initialize agent with approved entity types including `Artwork` and `Exhibition`
+2. Prompt: `Propose fact types for relationships between Artworks and Exhibitions`
+3. Observe if the agent proposes multiple predicates like:
+   - `(Artwork, loaned_for, Exhibition)`
+   - `(Artwork, featured_in, Exhibition)`
+   - `(Artwork, displayed_at, Exhibition)`
+4. Check the critic feedback in session state
+
+**Expected Result**:
+- ✅ **If multiple predicates connect same entity pair**, critic flags the issue:
+  - Example: "Duplicate subject-object pair: (Artwork, loaned_for, Exhibition) and (Artwork, featured_in, Exhibition) - are these truly distinct? If not, consolidate to ONE predicate"
+- ✅ **If semantically distinct**, critic accepts with justification:
+  - Example: `loaned_for` (temporary ownership) vs `featured_in` (exhibition participation) may be distinct
+  - Critic should document WHY they're distinct
+- ✅ **If redundant**, proposal agent consolidates to ONE canonical predicate in next iteration
+- ✅ Final approved facts have ONE predicate per subject-object pair (unless distinct meanings documented)
+
+**Quality Check**:
+- ✅ Critic asks: "Are these truly different relationships?"
+- ✅ If distinct, the difference is semantically meaningful (e.g., temporal, ownership, attribution)
+- ✅ Generic synonyms are consolidated (e.g., `exhibited_in`, `displayed_in`, `shown_at` → ONE)
+
+---
+
+### Test 11: Orphaned Entity Detection
+
+**Objective**: Verify that the critic detects approved entity types that are not used in any relationship (structured or unstructured).
+
+**Steps**:
+1. Initialize agent with:
+   - **Approved Entity Types**: `Artist`, `Artwork`, `Location`, `Exhibition`, `Collection`, `Institution`
+   - **Approved Construction Plan**: 
+     ```
+     CREATED_BY | Artwork | Artist
+     LOCATED_AT | Artwork | Location
+     HAS_MEDIUM | Artwork | Medium
+     ```
+2. Prompt: `Propose fact types focusing on exhibitions only`
+3. Agent proposes facts like:
+   - `(Artwork, featured_in, Exhibition)`
+   - `(Artist, founded, ArtMovement)`
+4. Observe critic feedback
+
+**Expected Result**:
+- ✅ Critic identifies orphaned entities:
+  - `Collection` - not used in proposed facts or existing relationships
+  - `Institution` - not used in proposed facts or existing relationships
+- ✅ Critic provides specific feedback:
+  - "Orphaned entity: 'Collection' is approved but not used in any relationship (neither structured nor unstructured). Suggestion: Add facts like (Artwork, part_of, Collection) or (Institution, manages, Collection)"
+  - "Orphaned entity: 'Institution' appears in neither proposed facts nor existing structured relationships. Suggestion: Add facts like (Artwork, attributed_by, Institution) or (Exhibition, hosted_by, Institution)"
+- ✅ Critic status is "retry" if orphaned entities exist
+- ✅ In next iteration, proposal agent either:
+  - Adds facts using orphaned entities, OR
+  - Justifies why entity should remain standalone (rare)
+- ✅ Final validation confirms ALL approved entities are connected to the graph
+
+**Quality Check**:
+- ✅ No isolated nodes in the final graph structure
+- ✅ Every approved entity can be reached through graph traversal
+- ✅ Orphan detection covers BOTH structured and unstructured relationships
+
+**Example Valid Resolution**:
+After critic feedback, proposal agent adds:
+- `(Artwork, part_of, Collection)` - connects Collection
+- `(Exhibition, hosted_by, Institution)` - connects Institution
+- Critic validates and approves (status="valid")
+
+---
+
+### Test 12: Test Session Reset
 
 **Objective**: Verify that resetting the session clears all state properly.
 
@@ -833,7 +907,7 @@ streamlit run tests/ui/test_fact_extraction_agent_ui.py
 **Expected Result**:
 - ✅ Session state is completely cleared
 - ✅ Chat history is empty
-- ✅ Agent can be re-initialized and used normally after reset
+- ✅ Agent can be re-initialized and uses normally after reset
 
 ---
 

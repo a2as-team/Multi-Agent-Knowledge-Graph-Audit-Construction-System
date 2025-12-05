@@ -212,14 +212,43 @@ class AgentCaller:
                 
                 await asyncio.sleep(wait_time)
                 
+            except ValueError as e:
+                # Catch "No message in response" errors which often indicate rate limiting or API issues
+                error_str = str(e).lower()
+                if "no message in response" in error_str or "empty response" in error_str:
+                    retry_count += 1
+                    if retry_count > MAX_RETRIES_ON_RATE_LIMIT:
+                        logger.error(f"Max retries ({MAX_RETRIES_ON_RATE_LIMIT}) exceeded for empty response error")
+                        raise
+                    
+                    # Use exponential backoff for empty response errors
+                    wait_time = GEMINI_FREE_TIER_WAIT_TIME * (RETRY_BACKOFF_MULTIPLIER ** (retry_count - 1))
+                    logger.warning(
+                        f"Empty API response error encountered (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
+                        f"This often indicates rate limiting. Retrying after {wait_time:.2f} seconds..."
+                    )
+                    
+                    await asyncio.sleep(wait_time)
+                else:
+                    # If it's a different ValueError, re-raise it
+                    raise
+                
             except Exception as e:
                 # Check if it's a RateLimitError wrapped in another exception
                 error_str = str(e).lower()
-                if "ratelimit" in error_str or "rate limit" in error_str or "429" in error_str:
+                
+                # Check for rate limit errors OR "No message in response" error (which often indicates rate limiting)
+                is_rate_limit = "ratelimit" in error_str or "rate limit" in error_str or "429" in error_str
+                is_empty_response = "no message in response" in error_str or "empty response" in error_str
+                
+                if is_rate_limit or is_empty_response:
                     retry_count += 1
                     if retry_count > MAX_RETRIES_ON_RATE_LIMIT:
                         logger.error(f"Max retries ({MAX_RETRIES_ON_RATE_LIMIT}) exceeded for rate limit error")
                         raise
+                    
+                    # Determine error type for logging
+                    error_type = "Rate limit error" if is_rate_limit else "Empty API response error (likely rate limiting)"
                     
                     # Try to extract exact retry delay from error message
                     extracted_delay = extract_retry_delay_from_error(e)
@@ -227,13 +256,13 @@ class AgentCaller:
                     if extracted_delay:
                         wait_time = extracted_delay
                         logger.warning(
-                            f"Rate limit error detected in exception (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
+                            f"{error_type} detected in exception (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
                             f"Using exact retry delay from API: {wait_time:.2f} seconds..."
                         )
                     else:
                         wait_time = GEMINI_FREE_TIER_WAIT_TIME * (RETRY_BACKOFF_MULTIPLIER ** (retry_count - 1))
                         logger.warning(
-                            f"Rate limit error detected in exception (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
+                            f"{error_type} detected in exception (attempt {retry_count}/{MAX_RETRIES_ON_RATE_LIMIT}). "
                             f"Could not parse retry delay, using exponential backoff: {wait_time:.2f} seconds..."
                         )
                     
