@@ -618,3 +618,44 @@ def get_ingestion_progress(tool_context: ToolContext) -> Dict[str, Any]:
         "audit_trail": audit_trail
     })
 
+
+def clear_neo4j_data(tool_context: ToolContext) -> Dict[str, Any]:
+    """
+    Clear all data from the Neo4j graph database.
+    
+    Use with caution! This will delete all nodes and relationships.
+    Useful for testing to prevent duplicate structures on multiple runs.
+    
+    Args:
+        tool_context: ADK ToolContext
+    
+    Returns:
+        Dictionary with status and message
+    """
+    try:
+        graphdb = get_graphdb()
+        if graphdb is None:
+            return tool_error("Neo4j connection not available")
+        
+        # Delete all nodes and relationships in batches
+        result = graphdb.send_query(
+            """MATCH (n) 
+            CALL { WITH n DETACH DELETE n } 
+            IN TRANSACTIONS OF 10000 ROWS
+            RETURN count(*) as deleted"""
+        )
+        
+        if result["status"] == "error":
+            return tool_error(f"Failed to clear Neo4j: {result.get('error_message', 'Unknown error')}")
+        
+        deleted_count = result.get("query_result", [{}])[0].get("deleted", 0)
+        
+        logger.info(f"Cleared Neo4j database: {deleted_count} nodes deleted")
+        
+        return tool_success("clear_result", {
+            "message": "Neo4j graph has been cleared",
+            "nodes_deleted": deleted_count
+        })
+    except Exception as e:
+        return tool_error(f"Error clearing Neo4j: {str(e)}")
+

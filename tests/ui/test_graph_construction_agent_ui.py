@@ -188,6 +188,85 @@ st.session_state.verbose_logging = st.sidebar.checkbox(
     value=st.session_state.verbose_logging
 )
 
+# Neo4j Setup Section
+st.sidebar.divider()
+st.sidebar.subheader("🔧 Neo4j Setup")
+
+# Connection status check
+if st.sidebar.button("Check Neo4j Connection"):
+    if st.session_state.agent_caller is not None:
+        async def check_connection():
+            response = await st.session_state.agent_caller.call(
+                "Check if Neo4j is ready",
+                verbose=False
+            )
+            return response
+        
+        try:
+            result = asyncio.run(check_connection())
+            st.sidebar.success("✅ " + result)
+        except Exception as e:
+            st.sidebar.error(f"❌ Connection failed: {e}")
+    else:
+        st.sidebar.warning("⚠️ Initialize agent first")
+
+# Clear Neo4j button (with confirmation)
+st.sidebar.markdown("**⚠️ Clear Graph Data**")
+clear_confirmed = st.sidebar.checkbox(
+    "I understand this will delete all data",
+    key="clear_confirmation"
+)
+
+if st.sidebar.button("🗑️ Clear Neo4j Database", disabled=not clear_confirmed):
+    if st.session_state.agent_caller is not None:
+        async def clear_db():
+            response = await st.session_state.agent_caller.call(
+                "Clear all data from Neo4j database",
+                verbose=False
+            )
+            return response
+        
+        try:
+            with st.sidebar.spinner("Clearing Neo4j..."):
+                result = asyncio.run(clear_db())
+                st.sidebar.success("✅ " + result)
+                st.sidebar.info("💡 You can now rebuild the graph without duplicates")
+        except Exception as e:
+            st.sidebar.error(f"❌ Failed to clear: {e}")
+    else:
+        st.sidebar.warning("⚠️ Initialize agent first")
+
+# Neo4j setup instructions
+with st.sidebar.expander("📖 Neo4j Setup Instructions"):
+    st.markdown("""
+    **1. Install Neo4j Desktop:**
+    - Download from https://neo4j.com/download/
+    - Install and create a new database
+    
+    **2. Set Environment Variables:**
+    Create a `.env` file in project root:
+    ```
+    NEO4J_URI=bolt://localhost:7687
+    NEO4J_USERNAME=neo4j
+    NEO4J_PASSWORD=your_password
+    NEO4J_DATABASE=neo4j
+    ```
+    
+    **3. Start Neo4j:**
+    - Open Neo4j Desktop
+    - Start your database
+    - Note the bolt:// URI (usually bolt://localhost:7687)
+    
+    **4. Place CSV Files:**
+    - Find Neo4j import directory (check with agent)
+    - Copy CSV files to that directory
+    - Default: `neo4j/import/` or check Neo4j Desktop settings
+    
+    **5. Prevent Duplicates:**
+    - Use "Clear Neo4j Database" button before rebuilding
+    - Or use MERGE (already implemented) - won't create duplicates
+    """)
+
 
 # Main chat interface
 st.header("2. Chat with Agent")
@@ -293,29 +372,39 @@ else:
 st.divider()
 with st.expander("💡 Tips for Using This Agent"):
     st.markdown("""
+    **Neo4j Setup (First Time):**
+    1. Install Neo4j Desktop and create a database
+    2. Set environment variables in `.env` file:
+       - NEO4J_URI=bolt://localhost:7687
+       - NEO4J_USERNAME=neo4j
+       - NEO4J_PASSWORD=your_password
+    3. Start Neo4j database in Desktop
+    4. Place CSV files in Neo4j import directory
+    5. Click "Check Neo4j Connection" to verify
+    
+    **Preventing Duplicates:**
+    - **Option 1:** Click "Clear Neo4j Database" before building (recommended for testing)
+    - **Option 2:** Use MERGE (already implemented) - safe to run multiple times
+    - MERGE updates existing nodes instead of creating duplicates
+    
     **Getting Started:**
     1. Initialize the agent with your construction plan
-    2. Ensure CSV files are in the Neo4j import directory
-    3. Ask the agent to build the graph
-    4. Monitor ingestion progress in the dashboard
+    2. Check Neo4j connection
+    3. (Optional) Clear database for fresh start
+    4. Ask the agent to build the graph
+    5. Monitor ingestion progress in the dashboard
     
     **Example Prompts:**
+    - "Check if Neo4j is ready"
+    - "Clear all data from Neo4j database"
     - "Please build the graph according to the construction plan"
     - "Execute the construction plan"
-    - "Load all nodes and relationships"
     - "Show me the ingestion progress"
-    - "Check Neo4j connection"
-    
-    **Prerequisites:**
-    - Neo4j must be running and accessible
-    - NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD must be set
-    - CSV files must be in the Neo4j import directory
-    - Construction plan must be approved
     
     **Process:**
     1. Agent checks Neo4j connection
     2. Creates uniqueness constraints for all node types
-    3. Loads all nodes from CSV files
+    3. Loads all nodes from CSV files (using MERGE)
     4. Loads all relationships from CSV files
     5. Reports final summary
     

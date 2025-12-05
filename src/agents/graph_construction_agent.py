@@ -21,7 +21,8 @@ from src.tools.graph_construction_tools import (
     load_nodes_from_csv,
     load_relationships_from_csv,
     get_ingestion_progress,
-    get_pre_ingestion_audit_resolutions
+    get_pre_ingestion_audit_resolutions,
+    clear_neo4j_data
 )
 
 # Ignore warnings
@@ -116,6 +117,21 @@ to handle problematic records:
 - merge: Combine duplicate records
 - manual_fix: Record was fixed manually before ingestion
 
+**Preventing Duplicates:**
+
+The system uses MERGE operations which prevent duplicate nodes/relationships
+based on unique identifiers. However, for clean testing:
+
+1. **Option 1: Clear before building**
+   - User can call clear_neo4j_data before construction
+   - Ensures fresh start for each test run
+   - Useful when testing multiple times
+
+2. **Option 2: Use MERGE (default)**
+   - MERGE operations automatically prevent duplicates
+   - If node exists, it updates properties instead of creating new
+   - Safe to run multiple times without creating duplicates
+
 **Error Handling:**
 
 - If Neo4j connection fails, inform user and stop
@@ -135,6 +151,7 @@ AVAILABLE TOOLS (use these exact names - no other functions exist):
 - load_nodes_from_csv: Load nodes from a CSV file
 - load_relationships_from_csv: Load relationships from a CSV file
 - get_ingestion_progress: Get current ingestion progress
+- clear_neo4j_data: Clear all data from Neo4j (use before rebuilding for testing)
 
 **Workflow:**
 
@@ -201,7 +218,8 @@ agent_tools = [
     create_uniqueness_constraint,
     load_nodes_from_csv,
     load_relationships_from_csv,
-    get_ingestion_progress
+    get_ingestion_progress,
+    clear_neo4j_data
 ]
 
 
