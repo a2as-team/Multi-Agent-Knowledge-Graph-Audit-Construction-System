@@ -4,11 +4,14 @@
 ┌─────────────────────────────────────────────────────────────┐
 │          SETU CONTENT AUDIT SYSTEM                          │
 │   Multi-Agent Knowledge Graph Construction & Validation     │
-│   ⭐ NEW: Unified Audit Review at End                       │
+│   ⭐ NEW: Two-Stage Audit Review                            │
 └─────────────────────────────────────────────────────────────┘
 GOAL: Build a knowledge graph as "source of truth" 
       with complete user verification and audit trail
-      All audit queries reviewed together at the end
+      
+TWO-STAGE RESOLUTION:
+  Stage 1: Pre-ingestion queries resolved immediately (BLOCKS Phase 4)
+  Stage 2: Entity + Post-ingestion queries reviewed together at end
 
 🔄 Complete Agent Workflow
 ┌──────────────────────────────────────────────────────────────────┐
@@ -55,7 +58,7 @@ GOAL: Build a knowledge graph as "source of truth"
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 3: PRE-INGESTION VALIDATION                               │
 └──────────────────────────────────────────────────────────────────┘
-8. PRE-INGESTION AUDIT AGENT ⭐ MODIFIED
+8. PRE-INGESTION AUDIT AGENT
    ├─ Input: CSV/markdown files, schema
    ├─ Scans for:
    │  ├─ Duplicate unique identifiers
@@ -63,24 +66,36 @@ GOAL: Build a knowledge graph as "source of truth"
    │  ├─ Invalid foreign key references
    │  ├─ Data type mismatches
    │  └─ Schema violations
-   ├─ Output: Audit queries (stored, NOT shown to user)
-   ├─ Behavior: Creates queries, stores in state, continues
+   ├─ Output: Audit queries (stored in state)
    └─ State: PRE_INGESTION_AUDIT_QUERIES
+
+9. PRE-INGESTION REVIEW INTERFACE ⭐ BLOCKING
+   ├─ Input: Pre-ingestion audit queries
+   ├─ Behavior: **BLOCKS Phase 4 until all queries resolved**
+   ├─ User reviews and resolves pre-ingestion queries:
+   │  ├─ skip_record
+   │  ├─ use_first, use_second
+   │  ├─ merge
+   │  ├─ manual_fix
+   │  └─ reject (investigate)
+   ├─ Output: Resolved pre-ingestion queries
+   └─ State: AUDIT_RESOLUTIONS (pre-ingestion only)
 
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 4: KNOWLEDGE GRAPH CONSTRUCTION                           │
 └──────────────────────────────────────────────────────────────────┘
-9. KG CONSTRUCTION PART I (Domain Graph)
-   ├─ Input: Construction plan, CSV files
-   ├─ Process:
-   │  ├─ Create constraints
-   │  ├─ Load nodes from CSV (applies pre-ingestion resolutions if available)
-   │  ├─ Create relationships from CSV
-   │  └─ Track ingestion actions (audit trail)
-   ├─ Output: Domain Graph in Neo4j
-   └─ State: INGESTION_AUDIT_TRAIL
+10. KG CONSTRUCTION PART I (Domain Graph)
+    ├─ Input: Construction plan, CSV files, pre-ingestion resolutions
+    ├─ **Prerequisite: All pre-ingestion queries must be resolved**
+    ├─ Process:
+    │  ├─ Create constraints
+    │  ├─ Load nodes from CSV (applies pre-ingestion resolutions)
+    │  ├─ Create relationships from CSV
+    │  └─ Track ingestion actions (audit trail)
+    ├─ Output: Domain Graph in Neo4j
+    └─ State: INGESTION_AUDIT_TRAIL
 
-10. KG CONSTRUCTION PART II (Subject & Lexical Graphs)
+11. KG CONSTRUCTION PART II (Subject & Lexical Graphs)
     ├─ Input: Markdown files, entity types, fact types
     ├─ Process:
     │  ├─ Chunk markdown files
@@ -95,7 +110,7 @@ GOAL: Build a knowledge graph as "source of truth"
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 5: ENTITY RESOLUTION                                      │
 └──────────────────────────────────────────────────────────────────┘
-11. ENTITY RESOLUTION AUDIT AGENT ⭐ MODIFIED
+12. ENTITY RESOLUTION AUDIT AGENT ⭐ MODIFIED
     ├─ Input: Domain Graph, Subject Graph
     ├─ Process:
     │  ├─ Find entities with same label in both graphs
@@ -109,7 +124,7 @@ GOAL: Build a knowledge graph as "source of truth"
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 6: POST-INGESTION VALIDATION                              │
 └──────────────────────────────────────────────────────────────────┘
-12. POST-INGESTION AUDIT AGENT ⭐ MODIFIED
+13. POST-INGESTION AUDIT AGENT ⭐ MODIFIED
     ├─ Input: Complete KG, data quality rules
     ├─ Generates audit queries for:
     │  ├─ Required relationship violations
@@ -126,35 +141,34 @@ GOAL: Build a knowledge graph as "source of truth"
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 7: UNIFIED AUDIT REVIEW ⭐ NEW                            │
 └──────────────────────────────────────────────────────────────────┘
-13. UNIFIED AUDIT REVIEW INTERFACE
-    ├─ Input: All audit queries from all phases
+14. UNIFIED AUDIT REVIEW INTERFACE
+    ├─ Input: Entity resolution + Post-ingestion audit queries
     ├─ Collects queries from:
-    │  ├─ PRE_INGESTION_AUDIT_QUERIES
     │  ├─ ENTITY_RESOLUTION_AUDIT_QUERIES
     │  └─ POST_INGESTION_AUDIT_QUERIES
-    ├─ Displays all queries grouped by:
-    │  ├─ Type (pre-ingestion, entity resolution, post-ingestion)
+    ├─ **Pre-ingestion queries**: Shown as read-only "already processed"
+    ├─ Displays queries grouped by:
+    │  ├─ Type (entity resolution, post-ingestion)
     │  ├─ Severity (error, warning, info)
     │  ├─ Status (pending, approved, rejected)
-    │  └─ Category (duplicates, missing fields, matches, etc.)
-    ├─ User reviews and resolves ALL queries in one place
-    ├─ Resolution options vary by query type:
-    │  ├─ Pre-ingestion: skip_record, use_first, use_second, merge, manual_fix
+    │  └─ Category (matches, violations, inconsistencies, etc.)
+    ├─ User reviews and resolves Entity + Post-ingestion queries
+    ├─ Resolution options:
     │  ├─ Entity resolution: approve_match, reject_match, manual_match, skip
     │  └─ Post-ingestion: fix_source, accept_as_is, manual_fix, flag_for_investigation
     ├─ Batch actions available:
     │  ├─ Approve all high-confidence matches
     │  ├─ Reject all low-confidence matches
     │  └─ Filter by type/severity
-    └─ State: AUDIT_RESOLUTIONS (unified)
+    └─ State: AUDIT_RESOLUTIONS (entity + post-ingestion)
 
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 8: EXECUTION OF APPROVED QUERIES                          │
 └──────────────────────────────────────────────────────────────────┘
-14. AUDIT QUERY EXECUTION AGENT ⭐ NEW
-    ├─ Input: Approved audit resolutions
+15. AUDIT QUERY EXECUTION AGENT ⭐ NEW
+    ├─ Input: Approved audit resolutions (entity + post-ingestion)
+    ├─ **Note: Pre-ingestion resolutions already applied in Phase 4**
     ├─ Process:
-    │  ├─ Execute pre-ingestion resolutions (if not already applied)
     │  ├─ Execute entity resolution matches (create CORRESPONDS_TO)
     │  ├─ Execute post-ingestion fixes (if applicable)
     │  └─ Track all executions in audit trail
@@ -164,7 +178,7 @@ GOAL: Build a knowledge graph as "source of truth"
 ┌──────────────────────────────────────────────────────────────────┐
 │ PHASE 9: FINAL AUDIT REPORT                                     │
 └──────────────────────────────────────────────────────────────────┘
-15. AUDIT REPORT GENERATION
+16. AUDIT REPORT GENERATION
     ├─ Consolidates all audit trails
     ├─ Generates comprehensive report:
     │  ├─ Pre-ingestion issues resolved
@@ -176,7 +190,7 @@ GOAL: Build a knowledge graph as "source of truth"
     ├─ Output: Final audit report
     └─ State: FINAL_AUDIT_REPORT
 
-16. KNOWLEDGE GRAPH (Source of Truth)
+17. KNOWLEDGE GRAPH (Source of Truth)
     ├─ Validated and user-approved
     ├─ Complete provenance
     ├─ Full audit trail
@@ -233,16 +247,21 @@ session_state = {
         }
     },
     
-    # Phase 4: Ingestion Tracking
-    "ingestion_audit_trail": {...},
-    
-    # Phase 7: Unified Resolutions
-    "audit_resolutions": {
+    # Phase 3.5: Pre-Ingestion Resolutions (applied in Phase 4)
+    "pre_ingestion_resolutions": {
         "pre_ing_001": {
             "resolution": "use_first",
             "notes": "First record is correct",
-            "resolved_at": "2024-01-15T10:30:00"
-        },
+            "resolved_at": "2024-01-15T10:30:00",
+            "applied_in_phase": 4
+        }
+    },
+    
+    # Phase 4: Ingestion Tracking
+    "ingestion_audit_trail": {...},
+    
+    # Phase 7: Unified Resolutions (Entity + Post-Ingestion)
+    "audit_resolutions": {
         "entity_res_001": {
             "resolution": "approve_match",
             "notes": "High confidence match",
@@ -270,25 +289,32 @@ session_state = {
 
 🔄 Key Changes from Current Architecture
 
-1. **Deferred Query Display**
-   - ❌ OLD: Queries shown immediately after each agent
-   - ✅ NEW: Queries stored in state, shown all together at end
+1. **Two-Stage Resolution**
+   - ❌ OLD: All queries shown immediately after each agent
+   - ✅ NEW: 
+     - **Stage 1**: Pre-ingestion queries resolved immediately (BLOCKS Phase 4)
+     - **Stage 2**: Entity + Post-ingestion queries reviewed together at end
 
-2. **Non-Blocking Agents**
-   - ❌ OLD: Agents wait for user resolution before continuing
-   - ✅ NEW: Agents create queries and continue, no blocking
+2. **Pre-Ingestion Blocking**
+   - ❌ OLD: Pre-ingestion queries could be deferred
+   - ✅ NEW: Pre-ingestion queries MUST be resolved before KG Construction
+   - **Reason**: Avoids re-ingestion if resolved later
 
-3. **Unified Review Interface**
+3. **Unified Review Interface (Partial)**
    - ❌ OLD: Separate review interfaces for each query type
-   - ✅ NEW: Single interface showing all query types together
+   - ✅ NEW: Single interface for Entity + Post-ingestion queries
+   - Pre-ingestion queries shown as read-only "already processed"
 
-4. **Batch Resolution**
-   - ❌ OLD: Resolve queries one by one as they appear
-   - ✅ NEW: Review and resolve all queries in one session
+4. **Non-Blocking Agents (Entity + Post)**
+   - ❌ OLD: Agents wait for user resolution before continuing
+   - ✅ NEW: Entity/Post-ingestion agents create queries and continue
+   - Pre-ingestion agent blocks until resolution
 
 5. **Execution Phase**
    - ❌ OLD: Queries executed immediately after approval
-   - ✅ NEW: All approved queries executed together in dedicated phase
+   - ✅ NEW: 
+     - Pre-ingestion resolutions applied during Phase 4 ingestion
+     - Entity + Post-ingestion resolutions executed together in Phase 8
 
 🛠️ Implementation Requirements
 
@@ -306,19 +332,28 @@ session_state = {
 
 **Modified Components:**
 1. Pre-Ingestion Audit Agent
-   - Remove: Immediate query display/prompting
    - Keep: Query creation and storage
-   - Add: Summary message: "Created X audit queries for review"
+   - Add: Immediate review interface (BLOCKING)
+   - Behavior: Cannot proceed to Phase 4 until all queries resolved
 
-2. Entity Resolution Audit Agent
+2. Pre-Ingestion Review Interface (NEW)
+   - Tool: `get_pre_ingestion_audit_queries()` - get queries
+   - Tool: `resolve_audit_query()` - resolve individual query
+   - Tool: `check_pre_ingestion_complete()` - verify all resolved
+   - UI: Streamlit interface for pre-ingestion queries only
+   - Blocks Phase 4 until completion
+
+3. Entity Resolution Audit Agent
    - Remove: Immediate match approval prompt
    - Keep: Match proposal and query creation
    - Add: Summary message: "Created X entity match proposals for review"
+   - Behavior: Non-blocking, continues after creating queries
 
-3. Post-Ingestion Audit Agent
+4. Post-Ingestion Audit Agent
    - Remove: Immediate issue display
    - Keep: Issue detection and query creation
    - Add: Summary message: "Created X quality issues for review"
+   - Behavior: Non-blocking, continues after creating queries
 
 **State Keys (Add to constants.py):**
 ```python
@@ -351,30 +386,50 @@ AUDIT_EXECUTION_TRAIL = "audit_execution_trail"
 
 🎯 Success Criteria
 
-- [ ] All three audit query types collected without blocking
-- [ ] Unified review interface shows all queries together
+- [ ] Pre-ingestion queries block Phase 4 until resolved
+- [ ] Entity + Post-ingestion queries collected without blocking
+- [ ] Unified review interface shows Entity + Post-ingestion queries together
+- [ ] Pre-ingestion queries shown as read-only in unified review
 - [ ] Queries grouped by type, severity, and status
 - [ ] Batch resolution actions available
-- [ ] All approved queries execute in correct order
+- [ ] Pre-ingestion resolutions applied during Phase 4 ingestion
+- [ ] Entity + Post-ingestion resolutions executed in Phase 8
 - [ ] Complete audit trail maintained
 - [ ] User can review and change decisions before execution
 
 📊 Query Flow Diagram
 
 ```
-Agent 1 (Pre-Ingestion) → Create Queries → Store in State → Continue
-Agent 2 (KG Construction) → Build Graph → Continue
-Agent 3 (Entity Resolution) → Create Queries → Store in State → Continue
-Agent 4 (Post-Ingestion) → Create Queries → Store in State → Continue
-                                                              ↓
-                    Unified Audit Review Interface ← Collect All Queries
-                                                              ↓
-                    User Reviews & Resolves All Queries
-                                                              ↓
+STAGE 1: Pre-Ingestion (BLOCKING)
+─────────────────────────────────
+Pre-Ingestion Audit Agent → Create Queries → Store in State
+                                    ↓
+                    Pre-Ingestion Review Interface (BLOCKS)
+                                    ↓
+                    User Resolves All Pre-Ingestion Queries
+                                    ↓
+                    ✅ All Resolved → Proceed to Phase 4
+
+STAGE 2: Entity + Post-Ingestion (Non-Blocking)
+────────────────────────────────────────────────
+KG Construction Part I → Build Domain Graph (uses pre-ingestion resolutions)
+KG Construction Part II → Build Subject/Lexical Graphs
+                                    ↓
+Entity Resolution Agent → Create Queries → Store in State → Continue
+Post-Ingestion Agent → Create Queries → Store in State → Continue
+                                    ↓
+                    Unified Audit Review Interface
+                    (Entity + Post-Ingestion queries only)
+                                    ↓
+                    User Reviews & Resolves Queries
+                                    ↓
                     Audit Query Execution Agent → Execute Approved Queries
-                                                              ↓
+                                    ↓
                     Final Audit Report → Complete
 ```
 
-This architecture provides a streamlined workflow where users see and resolve all audit queries together at the end, providing better context and more efficient decision-making.
+This architecture provides a streamlined workflow with:
+- **Pre-ingestion queries**: Resolved immediately (blocks ingestion to avoid re-work)
+- **Entity + Post-ingestion queries**: Reviewed together at the end (non-blocking, better context)
+- **Efficient execution**: Pre-ingestion resolutions applied during ingestion, others executed together
 

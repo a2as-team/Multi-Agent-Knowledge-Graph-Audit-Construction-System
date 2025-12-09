@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setu Content Audit System - Detailed Agent Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #e0e0e0;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .summary {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .summary-item {
+            text-align: center;
+            padding: 15px 25px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            min-width: 120px;
+        }
+
+        .summary-item .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .summary-item .label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .diagram {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        .agent-flow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .agent-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        .agent-node {
+            position: relative;
+            border: 3px solid;
+            border-radius: 12px;
+            padding: 12px 15px;
+            min-width: 180px;
+            max-width: 200px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .agent-node:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+        }
+
+        .agent-node.active {
+            transform: scale(1.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        /* Agent type colors */
+        .agent-planning {
+            background: linear-gradient(135deg, #e3f2fd 0%, #90caf9 100%);
+            border-color: #1976d2;
+            color: #0d47a1;
+        }
+
+        .agent-quality {
+            background: linear-gradient(135deg, #f3e5f5 0%, #ce93d8 100%);
+            border-color: #7b1fa2;
+            color: #4a148c;
+        }
+
+        .agent-blocking {
+            background: linear-gradient(135deg, #ffebee 0%, #ef5350 100%);
+            border-color: #c62828;
+            color: #b71c1c;
+            font-weight: bold;
+        }
+
+        .agent-construction {
+            background: linear-gradient(135deg, #e8f5e9 0%, #81c784 100%);
+            border-color: #388e3c;
+            color: #1b5e20;
+        }
+
+        .agent-validation {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffb74d 100%);
+            border-color: #f57c00;
+            color: #e65100;
+        }
+
+        .agent-review {
+            background: linear-gradient(135deg, #e1f5fe 0%, #4fc3f7 100%);
+            border-color: #0277bd;
+            color: #01579b;
+        }
+
+        .agent-final {
+            background: linear-gradient(135deg, #f1f8e9 0%, #aed581 100%);
+            border-color: #558b2f;
+            color: #33691e;
+        }
+
+        .agent-id {
+            font-size: 0.7em;
+            opacity: 0.8;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .agent-icon {
+            font-size: 2em;
+            margin: 5px 0;
+        }
+
+        .agent-name {
+            font-size: 0.85em;
+            font-weight: bold;
+            margin: 5px 0;
+            line-height: 1.2;
+        }
+
+        .agent-phase {
+            font-size: 0.7em;
+            opacity: 0.7;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .agent-state {
+            font-size: 0.7em;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .state-key-mini {
+            background: rgba(255,255,255,0.8);
+            padding: 3px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.65em;
+            margin: 3px 0;
+            display: block;
+            word-break: break-all;
+        }
+
+        .blocking-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #f44336;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            font-weight: bold;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+        }
+
+        .arrow-down {
+            font-size: 24px;
+            color: #666;
+            margin: 8px 0;
+            text-align: center;
+        }
+
+        .arrow-right {
+            font-size: 24px;
+            color: #666;
+        }
+
+        .phase-divider {
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(to right, transparent, #999, transparent);
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .phase-label {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f8f9fa;
+            padding: 5px 15px;
+            top: -12px;
+            font-weight: bold;
+            color: #555;
+            font-size: 0.9em;
+        }
+
+        .details-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .details-panel.active {
+            display: block;
+        }
+
+        .details-panel h2 {
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .details-panel .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .details-panel .close-btn:hover {
+            background: #d32f2f;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: white;
+            border-radius: 5px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            color: #666;
+        }
+
+        .parallel-flow {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ Setu Content Audit System</h1>
+            <p>Detailed Agent Flow - All 17 Agents in Sequence</p>
+        </div>
+
+        <div class="summary">
+            <div class="summary-item">
+                <div class="value">17</div>
+                <div class="label">Agents</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">9</div>
+                <div class="label">Phases</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">1</div>
+                <div class="label">Blocking Agent</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">14</div>
+                <div class="label">State Keys</div>
+            </div>
+        </div>
+
+        <div class="diagram">
+            <div class="agent-flow">
+                <!-- Phase 1: Planning -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 1: Planning & Schema Definition</div>
+                </div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-planning" onclick="showDetails(1)">
+                        <div class="agent-id">Agent 1</div>
+                        <div class="agent-icon">🎯</div>
+                        <div class="agent-name">User Intent Agent</div>
+                        <div class="agent-phase">Phase 1</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">APPROVED_USER_GOAL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-planning" onclick="showDetails(2)">
+                        <div class="agent-id">Agent 2</div>
+                        <div class="agent-icon">📁</div>
+                        <div class="agent-name">File Suggestion (Structured)</div>
+                        <div class="agent-phase">Phase 1</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">APPROVED_FILES</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-planning" onclick="showDetails(3)">
+                        <div class="agent-id">Agent 3</div>
+                        <div class="agent-icon">📐</div>
+                        <div class="agent-name">Schema Proposal (Structured)</div>
+                        <div class="agent-phase">Phase 1</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">APPROVED_CONSTRUCTION_PLAN</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="parallel-flow">
+                    <div style="flex: 1;">
+                        <div class="agent-node agent-planning" onclick="showDetails(4)">
+                            <div class="agent-id">Agent 4</div>
+                            <div class="agent-icon">📄</div>
+                            <div class="agent-name">File Suggestion (Unstructured)</div>
+                            <div class="agent-phase">Phase 1</div>
+                            <div class="agent-state">
+                                <span class="state-key-mini">APPROVED_FILES</span>
+                            </div>
+                        </div>
+                        <div class="arrow-down">↓</div>
+                        <div class="agent-node agent-planning" onclick="showDetails(5)">
+                            <div class="agent-id">Agent 5</div>
+                            <div class="agent-icon">🏷️</div>
+                            <div class="agent-name">NER Agent</div>
+                            <div class="agent-phase">Phase 1</div>
+                            <div class="agent-state">
+                                <span class="state-key-mini">APPROVED_ENTITY_TYPES</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div class="arrow-down" style="visibility: hidden;">↓</div>
+                        <div class="arrow-down">↓</div>
+                        <div class="agent-node agent-planning" onclick="showDetails(6)">
+                            <div class="agent-id">Agent 6</div>
+                            <div class="agent-icon">🔗</div>
+                            <div class="agent-name">Fact Extraction Agent</div>
+                            <div class="agent-phase">Phase 1</div>
+                            <div class="agent-state">
+                                <span class="state-key-mini">APPROVED_FACT_TYPES</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 2: Quality Rules -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 2: Data Quality Rules Definition</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-quality" onclick="showDetails(7)">
+                        <div class="agent-id">Agent 7</div>
+                        <div class="agent-icon">📏</div>
+                        <div class="agent-name">Data Quality Rules Agent</div>
+                        <div class="agent-phase">Phase 2</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">DATA_QUALITY_RULES</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 3: Pre-Ingestion -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 3: Pre-Ingestion Validation (BLOCKING)</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-blocking" onclick="showDetails(8)">
+                        <div class="blocking-badge">!</div>
+                        <div class="agent-id">Agent 8</div>
+                        <div class="agent-icon">🔍</div>
+                        <div class="agent-name">Pre-Ingestion Audit Agent</div>
+                        <div class="agent-phase">Phase 3</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">PRE_INGESTION_AUDIT_QUERIES</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-blocking" onclick="showDetails(9)">
+                        <div class="blocking-badge">!</div>
+                        <div class="agent-id">Agent 9</div>
+                        <div class="agent-icon">✏️</div>
+                        <div class="agent-name">Pre-Ingestion Review Interface</div>
+                        <div class="agent-phase">Phase 3 • BLOCKING</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">PRE_INGESTION_RESOLUTIONS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 4: Construction -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 4: Knowledge Graph Construction</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-construction" onclick="showDetails(10)">
+                        <div class="agent-id">Agent 10</div>
+                        <div class="agent-icon">🏗️</div>
+                        <div class="agent-name">KG Construction Part I (Domain Graph)</div>
+                        <div class="agent-phase">Phase 4</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">INGESTION_AUDIT_TRAIL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-construction" onclick="showDetails(11)">
+                        <div class="agent-id">Agent 11</div>
+                        <div class="agent-icon">📚</div>
+                        <div class="agent-name">KG Construction Part II (Subject & Lexical)</div>
+                        <div class="agent-phase">Phase 4</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">(Neo4j DB)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 5: Entity Resolution -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 5: Entity Resolution</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-validation" onclick="showDetails(12)">
+                        <div class="agent-id">Agent 12</div>
+                        <div class="agent-icon">🔗</div>
+                        <div class="agent-name">Entity Resolution Audit Agent</div>
+                        <div class="agent-phase">Phase 5</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">ENTITY_RESOLUTION_AUDIT_QUERIES</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 6: Post-Ingestion -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 6: Post-Ingestion Validation</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-validation" onclick="showDetails(13)">
+                        <div class="agent-id">Agent 13</div>
+                        <div class="agent-icon">✅</div>
+                        <div class="agent-name">Post-Ingestion Audit Agent</div>
+                        <div class="agent-phase">Phase 6</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">POST_INGESTION_AUDIT_QUERIES</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 7: Unified Review -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 7: Unified Audit Review</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-review" onclick="showDetails(14)">
+                        <div class="agent-id">Agent 14</div>
+                        <div class="agent-icon">📊</div>
+                        <div class="agent-name">Unified Audit Review Interface</div>
+                        <div class="agent-phase">Phase 7</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">AUDIT_RESOLUTIONS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 8: Execution -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 8: Execution of Approved Queries</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-review" onclick="showDetails(15)">
+                        <div class="agent-id">Agent 15</div>
+                        <div class="agent-icon">⚙️</div>
+                        <div class="agent-name">Audit Query Execution Agent</div>
+                        <div class="agent-phase">Phase 8</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">AUDIT_EXECUTION_TRAIL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 9: Final Report -->
+                <div class="phase-divider">
+                    <div class="phase-label">PHASE 9: Final Audit Report</div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-final" onclick="showDetails(16)">
+                        <div class="agent-id">Agent 16</div>
+                        <div class="agent-icon">📄</div>
+                        <div class="agent-name">Audit Report Generation</div>
+                        <div class="agent-phase">Phase 9</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">FINAL_AUDIT_REPORT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+
+                <div class="agent-row">
+                    <div class="agent-node agent-final" onclick="showDetails(17)">
+                        <div class="agent-id">Agent 17</div>
+                        <div class="agent-icon">✅</div>
+                        <div class="agent-name">Knowledge Graph (Source of Truth)</div>
+                        <div class="agent-phase">Phase 9 • Final</div>
+                        <div class="agent-state">
+                            <span class="state-key-mini">Validated KG</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color agent-planning"></div>
+                <span>Planning Agents</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color agent-quality"></div>
+                <span>Quality Rules</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color agent-blocking"></div>
+                <span>Blocking Agents</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color agent-construction"></div>
+                <span>Construction</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color agent-validation"></div>
+                <span>Validation</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color agent-review"></div>
+                <span>Review</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color agent-final"></div>
+                <span>Final</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Detailed Agent Flow Diagram | Setu Content Audit System</p>
+            <p style="font-size: 0.9em; margin-top: 5px;">Click on any agent to view detailed information</p>
+        </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="closeDetails()"></div>
+
+    <!-- Details Panel -->
+    <div class="details-panel" id="detailsPanel">
+        <button class="close-btn" onclick="closeDetails()">×</button>
+        <div id="detailsContent"></div>
+    </div>
+
+    <script>
+        const agentData = {
+            1: {
+                name: "User Intent Agent",
+                icon: "🎯",
+                phase: 1,
+                description: "Extract structured goal definition from user's natural language input",
+                inputs: ["User's natural language goal"],
+                outputs: ["APPROVED_USER_GOAL"],
+                purpose: "Understand what the user wants to achieve with the knowledge graph"
+            },
+            2: {
+                name: "File Suggestion Agent (Structured)",
+                icon: "📁",
+                phase: 1,
+                description: "Identify relevant CSV files based on user goal",
+                inputs: ["APPROVED_USER_GOAL", "Available CSV files"],
+                outputs: ["APPROVED_FILES (structured)"],
+                purpose: "Suggest which CSV files are relevant for the knowledge graph"
+            },
+            3: {
+                name: "Schema Proposal Agent (Structured)",
+                icon: "📐",
+                phase: 1,
+                description: "Propose graph schema (nodes and relationships) from CSV files",
+                inputs: ["APPROVED_USER_GOAL", "APPROVED_FILES (structured)"],
+                outputs: ["APPROVED_CONSTRUCTION_PLAN"],
+                purpose: "Design the structure of the knowledge graph from structured data"
+            },
+            4: {
+                name: "File Suggestion Agent (Unstructured)",
+                icon: "📄",
+                phase: 1,
+                description: "Identify relevant markdown files based on user goal",
+                inputs: ["APPROVED_USER_GOAL", "Available markdown files"],
+                outputs: ["APPROVED_FILES (unstructured)"],
+                purpose: "Suggest which markdown files are relevant for extraction"
+            },
+            5: {
+                name: "NER Agent",
+                icon: "🏷️",
+                phase: 1,
+                description: "Propose entity types to extract from unstructured text",
+                inputs: ["APPROVED_USER_GOAL", "APPROVED_FILES (unstructured)"],
+                outputs: ["APPROVED_ENTITY_TYPES"],
+                purpose: "Identify what types of entities should be extracted from text"
+            },
+            6: {
+                name: "Fact Extraction Agent",
+                icon: "🔗",
+                phase: 1,
+                description: "Propose relationship types (fact types) to extract",
+                inputs: ["APPROVED_USER_GOAL", "APPROVED_FILES (unstructured)", "APPROVED_ENTITY_TYPES"],
+                outputs: ["APPROVED_FACT_TYPES"],
+                purpose: "Identify what types of relationships should be extracted"
+            },
+            7: {
+                name: "Data Quality Rules Agent",
+                icon: "📏",
+                phase: 2,
+                description: "Define custom quality rules for validation",
+                inputs: ["User requirements", "APPROVED_CONSTRUCTION_PLAN", "APPROVED_ENTITY_TYPES", "APPROVED_FACT_TYPES"],
+                outputs: ["DATA_QUALITY_RULES"],
+                purpose: "Create validation rules for the knowledge graph"
+            },
+            8: {
+                name: "Pre-Ingestion Audit Agent",
+                icon: "🔍",
+                phase: 3,
+                description: "Scan CSV/markdown files for data quality issues before ingestion",
+                inputs: ["CSV/markdown files", "APPROVED_CONSTRUCTION_PLAN"],
+                outputs: ["PRE_INGESTION_AUDIT_QUERIES"],
+                scans: ["Duplicate unique identifiers", "Missing required fields", "Invalid foreign key references", "Data type mismatches", "Schema violations"],
+                purpose: "Detect data quality issues before loading into Neo4j"
+            },
+            9: {
+                name: "Pre-Ingestion Review Interface",
+                icon: "✏️",
+                phase: 3,
+                blocking: true,
+                description: "User interface for reviewing and resolving pre-ingestion audit queries",
+                inputs: ["PRE_INGESTION_AUDIT_QUERIES"],
+                outputs: ["PRE_INGESTION_RESOLUTIONS"],
+                resolutionOptions: ["skip_record", "use_first", "use_second", "merge", "manual_fix", "reject"],
+                note: "🔴 BLOCKS Phase 4 until all queries resolved",
+                purpose: "Allow user to resolve data quality issues before ingestion"
+            },
+            10: {
+                name: "KG Construction Part I (Domain Graph)",
+                icon: "🏗️",
+                phase: 4,
+                description: "Build domain graph from CSV files using construction plan",
+                inputs: ["APPROVED_CONSTRUCTION_PLAN", "CSV files", "PRE_INGESTION_RESOLUTIONS"],
+                outputs: ["INGESTION_AUDIT_TRAIL"],
+                process: ["Create constraints", "Load nodes from CSV", "Create relationships from CSV", "Track ingestion actions"],
+                prerequisite: "All pre-ingestion queries must be resolved",
+                purpose: "Load structured data into Neo4j as domain graph"
+            },
+            11: {
+                name: "KG Construction Part II (Subject & Lexical Graphs)",
+                icon: "📚",
+                phase: 4,
+                description: "Extract entities and relationships from markdown files",
+                inputs: ["Markdown files", "APPROVED_ENTITY_TYPES", "APPROVED_FACT_TYPES"],
+                outputs: ["Subject Graph", "Lexical Graph (in Neo4j)"],
+                process: ["Chunk markdown files", "Create Document and Chunk nodes", "Extract entities", "Extract relationships", "Link entities to chunks"],
+                purpose: "Build subject and lexical graphs from unstructured data"
+            },
+            12: {
+                name: "Entity Resolution Audit Agent",
+                icon: "🔗",
+                phase: 5,
+                description: "Find and propose matches between Domain and Subject graph entities",
+                inputs: ["Domain Graph", "Subject Graph"],
+                outputs: ["ENTITY_RESOLUTION_AUDIT_QUERIES"],
+                process: ["Find entities with same label", "Calculate similarity scores", "Generate match proposals"],
+                purpose: "Propose which entities from text match entities in structured data"
+            },
+            13: {
+                name: "Post-Ingestion Audit Agent",
+                icon: "✅",
+                phase: 6,
+                description: "Validate complete knowledge graph against quality rules",
+                inputs: ["Complete KG", "DATA_QUALITY_RULES"],
+                outputs: ["POST_INGESTION_AUDIT_QUERIES"],
+                checks: ["Required relationship violations", "Temporal constraint violations", "Orphaned nodes", "Unresolved entities", "Domain vs Subject inconsistencies", "Custom rule violations"],
+                purpose: "Validate the complete knowledge graph for quality issues"
+            },
+            14: {
+                name: "Unified Audit Review Interface",
+                icon: "📊",
+                phase: 7,
+                description: "Review and resolve Entity Resolution + Post-Ingestion queries together",
+                inputs: ["ENTITY_RESOLUTION_AUDIT_QUERIES", "POST_INGESTION_AUDIT_QUERIES"],
+                outputs: ["AUDIT_RESOLUTIONS"],
+                note: "Pre-ingestion queries shown as read-only (already processed)",
+                resolutionOptions: {
+                    entity: ["approve_match", "reject_match", "manual_match", "skip"],
+                    postIngestion: ["fix_source", "accept_as_is", "manual_fix", "flag_for_investigation"]
+                },
+                purpose: "Provide unified interface for reviewing all audit queries together"
+            },
+            15: {
+                name: "Audit Query Execution Agent",
+                icon: "⚙️",
+                phase: 8,
+                description: "Execute all approved audit resolutions",
+                inputs: ["AUDIT_RESOLUTIONS"],
+                outputs: ["AUDIT_EXECUTION_TRAIL"],
+                process: ["Execute entity resolution matches", "Execute post-ingestion fixes", "Track executions"],
+                note: "Pre-ingestion resolutions already applied in Phase 4",
+                purpose: "Apply all user-approved resolutions to the knowledge graph"
+            },
+            16: {
+                name: "Audit Report Generation",
+                icon: "📄",
+                phase: 9,
+                description: "Generate comprehensive audit report consolidating all audit trails",
+                inputs: ["AUDIT_EXECUTION_TRAIL", "PRE_INGESTION_RESOLUTIONS", "INGESTION_AUDIT_TRAIL"],
+                outputs: ["FINAL_AUDIT_REPORT"],
+                reportSections: ["Pre-ingestion issues resolved", "Ingestion statistics", "Entity resolution decisions", "Post-ingestion issues found", "Outstanding issues", "User decisions log"],
+                purpose: "Create final report documenting the entire audit process"
+            },
+            17: {
+                name: "Knowledge Graph (Source of Truth)",
+                icon: "✅",
+                phase: 9,
+                description: "Final validated and user-approved knowledge graph",
+                inputs: ["Complete validated KG"],
+                outputs: ["Knowledge Graph ready for use"],
+                characteristics: ["Validated", "User-approved", "Complete provenance", "Full audit trail"],
+                purpose: "Serve as the source of truth for the domain"
+            }
+        };
+
+        function showDetails(agentId) {
+            const agent = agentData[agentId];
+            const panel = document.getElementById('detailsPanel');
+            const overlay = document.getElementById('overlay');
+            const content = document.getElementById('detailsContent');
+
+            let html = `<h2>${agent.icon} Agent ${agentId}: ${agent.name}</h2>`;
+            html += `<p style="color: #666; margin-bottom: 20px;"><strong>Phase ${agent.phase}</strong> - ${agent.description}</p>`;
+
+            if (agent.blocking) {
+                html += `<div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-weight: bold;">🔴 BLOCKING AGENT - Must complete before Phase 4</div>`;
+            }
+
+            if (agent.note) {
+                html += `<div style="background: #fff3e0; color: #e65100; padding: 10px; border-radius: 5px; margin-bottom: 15px;">${agent.note}</div>`;
+            }
+
+            if (agent.prerequisite) {
+                html += `<div style="background: #e3f2fd; color: #1976d2; padding: 10px; border-radius: 5px; margin-bottom: 15px;">📋 <strong>Prerequisite:</strong> ${agent.prerequisite}</div>`;
+            }
+
+            html += `<div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 15px;">`;
+            html += `<strong>Purpose:</strong> ${agent.purpose}`;
+            html += `</div>`;
+
+            html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Inputs</h3>`;
+            html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+            agent.inputs.forEach(input => {
+                html += `<li style="margin-bottom: 5px;">${input}</li>`;
+            });
+            html += `</ul>`;
+
+            html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Outputs</h3>`;
+            html += `<div style="display: flex; flex-direction: column; gap: 5px;">`;
+            agent.outputs.forEach(output => {
+                html += `<code style="background: #e3f2fd; padding: 8px; border-radius: 4px; display: block; font-family: 'Courier New', monospace;">${output}</code>`;
+            });
+            html += `</div>`;
+
+            if (agent.process) {
+                html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Process Steps</h3>`;
+                html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                agent.process.forEach(step => {
+                    html += `<li style="margin-bottom: 5px;">${step}</li>`;
+                });
+                html += `</ul>`;
+            }
+
+            if (agent.scans) {
+                html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Scans For</h3>`;
+                html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                agent.scans.forEach(scan => {
+                    html += `<li style="margin-bottom: 5px;">${scan}</li>`;
+                });
+                html += `</ul>`;
+            }
+
+            if (agent.checks) {
+                html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Checks</h3>`;
+                html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                agent.checks.forEach(check => {
+                    html += `<li style="margin-bottom: 5px;">${check}</li>`;
+                });
+                html += `</ul>`;
+            }
+
+            if (agent.resolutionOptions) {
+                html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Resolution Options</h3>`;
+                if (typeof agent.resolutionOptions === 'object' && !Array.isArray(agent.resolutionOptions)) {
+                    if (agent.resolutionOptions.entity) {
+                        html += `<p><strong>Entity Resolution:</strong></p>`;
+                        html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                        agent.resolutionOptions.entity.forEach(opt => {
+                            html += `<li style="margin-bottom: 5px;"><code>${opt}</code></li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                    if (agent.resolutionOptions.postIngestion) {
+                        html += `<p><strong>Post-Ingestion:</strong></p>`;
+                        html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                        agent.resolutionOptions.postIngestion.forEach(opt => {
+                            html += `<li style="margin-bottom: 5px;"><code>${opt}</code></li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                } else {
+                    html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                    agent.resolutionOptions.forEach(opt => {
+                        html += `<li style="margin-bottom: 5px;"><code>${opt}</code></li>`;
+                    });
+                    html += `</ul>`;
+                }
+            }
+
+            if (agent.reportSections) {
+                html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Report Sections</h3>`;
+                html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                agent.reportSections.forEach(section => {
+                    html += `<li style="margin-bottom: 5px;">${section}</li>`;
+                });
+                html += `</ul>`;
+            }
+
+            if (agent.characteristics) {
+                html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Characteristics</h3>`;
+                html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+                agent.characteristics.forEach(char => {
+                    html += `<li style="margin-bottom: 5px;">${char}</li>`;
+                });
+                html += `</ul>`;
+            }
+
+            content.innerHTML = html;
+            panel.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function closeDetails() {
+            document.getElementById('detailsPanel').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDetails();
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setu Content Audit System - Architecture Diagram</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #e0e0e0;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .summary {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .summary-item {
+            text-align: center;
+            padding: 15px 25px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            min-width: 120px;
+        }
+
+        .summary-item .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .summary-item .label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .stage-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stage-badge {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        .stage-badge.blocking {
+            background: #ffebee;
+            color: #c62828;
+            border: 2px solid #ef5350;
+        }
+
+        .stage-badge.non-blocking {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 2px solid #66bb6a;
+        }
+
+        .diagram {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+
+        .flow-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .phase-node {
+            position: relative;
+            border: 3px solid;
+            border-radius: 12px;
+            padding: 15px;
+            min-width: 200px;
+            max-width: 220px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .phase-node:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+        }
+
+        .phase-node.active {
+            transform: scale(1.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        /* Color schemes for different phase types */
+        .phase-planning {
+            background: linear-gradient(135deg, #e3f2fd 0%, #90caf9 100%);
+            border-color: #1976d2;
+            color: #0d47a1;
+        }
+
+        .phase-quality {
+            background: linear-gradient(135deg, #f3e5f5 0%, #ce93d8 100%);
+            border-color: #7b1fa2;
+            color: #4a148c;
+        }
+
+        .phase-blocking {
+            background: linear-gradient(135deg, #ffebee 0%, #ef5350 100%);
+            border-color: #c62828;
+            color: #b71c1c;
+            font-weight: bold;
+        }
+
+        .phase-construction {
+            background: linear-gradient(135deg, #e8f5e9 0%, #81c784 100%);
+            border-color: #388e3c;
+            color: #1b5e20;
+        }
+
+        .phase-validation {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffb74d 100%);
+            border-color: #f57c00;
+            color: #e65100;
+        }
+
+        .phase-review {
+            background: linear-gradient(135deg, #e1f5fe 0%, #4fc3f7 100%);
+            border-color: #0277bd;
+            color: #01579b;
+        }
+
+        .phase-final {
+            background: linear-gradient(135deg, #f1f8e9 0%, #aed581 100%);
+            border-color: #558b2f;
+            color: #33691e;
+        }
+
+        .phase-number {
+            font-size: 0.75em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .phase-icon {
+            font-size: 2.5em;
+            margin: 8px 0;
+        }
+
+        .phase-name {
+            font-size: 1em;
+            font-weight: bold;
+            margin: 8px 0;
+        }
+
+        .phase-meta {
+            font-size: 0.8em;
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+
+        .phase-details {
+            font-size: 0.75em;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 2px solid rgba(0,0,0,0.2);
+            text-align: left;
+        }
+
+        .state-key-mini {
+            background: rgba(255,255,255,0.8);
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.7em;
+            margin: 4px 0;
+            display: block;
+            word-break: break-all;
+        }
+
+        .blocking-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: #f44336;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: bold;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+        }
+
+        .arrow-right {
+            font-size: 30px;
+            color: #666;
+            margin: 0 10px;
+        }
+
+        .arrow-down {
+            font-size: 30px;
+            color: #666;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .stage-label {
+            text-align: center;
+            font-weight: bold;
+            color: #555;
+            margin: 25px 0 10px 0;
+            font-size: 1.1em;
+            padding: 8px;
+            background: rgba(255,255,255,0.7);
+            border-radius: 5px;
+        }
+
+        .details-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .details-panel.active {
+            display: block;
+        }
+
+        .details-panel h2 {
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .details-panel .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .details-panel .close-btn:hover {
+            background: #d32f2f;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: white;
+            border-radius: 5px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ Setu Content Audit System</h1>
+            <p>Architecture Concept Diagram - Interactive Visualization</p>
+        </div>
+
+        <div class="summary">
+            <div class="summary-item">
+                <div class="value">9</div>
+                <div class="label">Phases</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">17</div>
+                <div class="label">Agents</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">1</div>
+                <div class="label">Blocking Phase</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">2</div>
+                <div class="label">Resolution Stages</div>
+            </div>
+        </div>
+
+        <div class="stage-indicator">
+            <div class="stage-badge blocking">🔴 Stage 1: Pre-Ingestion (BLOCKING)</div>
+            <div class="stage-badge non-blocking">✅ Stage 2: Unified Review (Non-Blocking)</div>
+        </div>
+
+        <div class="diagram">
+            <!-- Stage 1: Planning -->
+            <div class="stage-label">📋 STAGE 1: Planning & Preparation</div>
+            <div class="flow-row">
+                <div class="phase-node phase-planning" onclick="showDetails(1)">
+                    <div class="phase-number">Phase 1</div>
+                    <div class="phase-icon">📋</div>
+                    <div class="phase-name">Planning & Schema</div>
+                    <div class="phase-meta">6 agents • 5 state keys</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">APPROVED_USER_GOAL</span>
+                        <span class="state-key-mini">APPROVED_FILES</span>
+                        <span class="state-key-mini">+3 more</span>
+                    </div>
+                </div>
+                <span class="arrow-right">→</span>
+                <div class="phase-node phase-quality" onclick="showDetails(2)">
+                    <div class="phase-number">Phase 2</div>
+                    <div class="phase-icon">📏</div>
+                    <div class="phase-name">Quality Rules</div>
+                    <div class="phase-meta">1 agent • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">DATA_QUALITY_RULES</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow-down">↓</div>
+
+            <!-- Stage 2: Pre-Ingestion (Blocking) -->
+            <div class="stage-label">🔴 STAGE 2: Pre-Ingestion Validation (BLOCKING)</div>
+            <div class="flow-row">
+                <div class="phase-node phase-blocking" onclick="showDetails(3)">
+                    <div class="blocking-badge">!</div>
+                    <div class="phase-number">Phase 3</div>
+                    <div class="phase-icon">🔍</div>
+                    <div class="phase-name">Pre-Ingestion</div>
+                    <div class="phase-meta">2 agents • 2 state keys</div>
+                    <div style="color: #c62828; font-weight: bold; margin-top: 8px; font-size: 0.85em;">⚠️ BLOCKS Phase 4</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">PRE_INGESTION_AUDIT_QUERIES</span>
+                        <span class="state-key-mini">PRE_INGESTION_RESOLUTIONS</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow-down">↓</div>
+
+            <!-- Stage 3: Construction -->
+            <div class="stage-label">🏗️ STAGE 3: Knowledge Graph Construction</div>
+            <div class="flow-row">
+                <div class="phase-node phase-construction" onclick="showDetails(4)">
+                    <div class="phase-number">Phase 4</div>
+                    <div class="phase-icon">🏗️</div>
+                    <div class="phase-name">KG Construction</div>
+                    <div class="phase-meta">2 agents • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">INGESTION_AUDIT_TRAIL</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow-down">↓</div>
+
+            <!-- Stage 4: Validation -->
+            <div class="stage-label">🔍 STAGE 4: Validation & Resolution</div>
+            <div class="flow-row">
+                <div class="phase-node phase-validation" onclick="showDetails(5)">
+                    <div class="phase-number">Phase 5</div>
+                    <div class="phase-icon">🔗</div>
+                    <div class="phase-name">Entity Resolution</div>
+                    <div class="phase-meta">1 agent • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">ENTITY_RESOLUTION_AUDIT_QUERIES</span>
+                    </div>
+                </div>
+                <span class="arrow-right">→</span>
+                <div class="phase-node phase-validation" onclick="showDetails(6)">
+                    <div class="phase-number">Phase 6</div>
+                    <div class="phase-icon">✅</div>
+                    <div class="phase-name">Post-Ingestion</div>
+                    <div class="phase-meta">1 agent • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">POST_INGESTION_AUDIT_QUERIES</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow-down">↓</div>
+
+            <!-- Stage 5: Review & Finalization -->
+            <div class="stage-label">📊 STAGE 5: Review & Finalization</div>
+            <div class="flow-row">
+                <div class="phase-node phase-review" onclick="showDetails(7)">
+                    <div class="phase-number">Phase 7</div>
+                    <div class="phase-icon">📊</div>
+                    <div class="phase-name">Unified Review</div>
+                    <div class="phase-meta">1 agent • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">AUDIT_RESOLUTIONS</span>
+                    </div>
+                </div>
+                <span class="arrow-right">→</span>
+                <div class="phase-node phase-review" onclick="showDetails(8)">
+                    <div class="phase-number">Phase 8</div>
+                    <div class="phase-icon">⚙️</div>
+                    <div class="phase-name">Execution</div>
+                    <div class="phase-meta">1 agent • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">AUDIT_EXECUTION_TRAIL</span>
+                    </div>
+                </div>
+                <span class="arrow-right">→</span>
+                <div class="phase-node phase-final" onclick="showDetails(9)">
+                    <div class="phase-number">Phase 9</div>
+                    <div class="phase-icon">📄</div>
+                    <div class="phase-name">Final Report</div>
+                    <div class="phase-meta">2 agents • 1 state key</div>
+                    <div class="phase-details">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Outputs:</div>
+                        <span class="state-key-mini">FINAL_AUDIT_REPORT</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color phase-planning"></div>
+                <span>Planning</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color phase-quality"></div>
+                <span>Quality Rules</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color phase-blocking"></div>
+                <span>Blocking</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color phase-construction"></div>
+                <span>Construction</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color phase-validation"></div>
+                <span>Validation</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color phase-review"></div>
+                <span>Review</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color phase-final"></div>
+                <span>Final</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Architecture Concept Diagram | Setu Content Audit System</p>
+            <p style="font-size: 0.9em; margin-top: 5px;">Click on any phase to view detailed information</p>
+        </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="closeDetails()"></div>
+
+    <!-- Details Panel -->
+    <div class="details-panel" id="detailsPanel">
+        <button class="close-btn" onclick="closeDetails()">×</button>
+        <div id="detailsContent"></div>
+    </div>
+
+    <script>
+        const phaseData = {
+            1: {
+                name: "Planning & Schema Definition",
+                icon: "📋",
+                description: "Define user goals, identify relevant files, and propose graph schema",
+                agents: [
+                    "User Intent Agent - Extract structured goal from user input",
+                    "File Suggestion Agent (Structured) - Identify relevant CSV files",
+                    "Schema Proposal Agent (Structured) - Propose graph schema from CSV",
+                    "File Suggestion Agent (Unstructured) - Identify relevant markdown files",
+                    "NER Agent - Propose entity types to extract",
+                    "Fact Extraction Agent - Propose relationship types to extract"
+                ],
+                outputs: ["APPROVED_USER_GOAL", "APPROVED_FILES", "APPROVED_CONSTRUCTION_PLAN", "APPROVED_ENTITY_TYPES", "APPROVED_FACT_TYPES"],
+                blocking: false
+            },
+            2: {
+                name: "Data Quality Rules Definition",
+                icon: "📏",
+                description: "Define custom quality rules for validation",
+                agents: [
+                    "Data Quality Rules Agent - Define custom validation rules"
+                ],
+                outputs: ["DATA_QUALITY_RULES"],
+                blocking: false
+            },
+            3: {
+                name: "Pre-Ingestion Validation",
+                icon: "🔍",
+                description: "Scan CSV/markdown files for data quality issues before ingestion",
+                agents: [
+                    "Pre-Ingestion Audit Agent - Scan for duplicates, missing fields, invalid FKs",
+                    "Pre-Ingestion Review Interface - User resolves audit queries (BLOCKING)"
+                ],
+                outputs: ["PRE_INGESTION_AUDIT_QUERIES", "PRE_INGESTION_RESOLUTIONS"],
+                blocking: true,
+                note: "🔴 BLOCKS Phase 4 until all queries resolved"
+            },
+            4: {
+                name: "Knowledge Graph Construction",
+                icon: "🏗️",
+                description: "Build the knowledge graph from CSV and markdown files",
+                agents: [
+                    "KG Construction Part I (Domain Graph) - Build domain graph from CSV files",
+                    "KG Construction Part II (Subject & Lexical Graphs) - Extract entities/relationships from markdown"
+                ],
+                outputs: ["INGESTION_AUDIT_TRAIL"],
+                blocking: false,
+                prerequisite: "Requires: PRE_INGESTION_RESOLUTIONS"
+            },
+            5: {
+                name: "Entity Resolution",
+                icon: "🔗",
+                description: "Find and propose matches between Domain and Subject graph entities",
+                agents: [
+                    "Entity Resolution Audit Agent - Propose entity matches with similarity scores"
+                ],
+                outputs: ["ENTITY_RESOLUTION_AUDIT_QUERIES"],
+                blocking: false
+            },
+            6: {
+                name: "Post-Ingestion Validation",
+                icon: "✅",
+                description: "Validate complete knowledge graph against quality rules",
+                agents: [
+                    "Post-Ingestion Audit Agent - Validate KG against quality rules"
+                ],
+                outputs: ["POST_INGESTION_AUDIT_QUERIES"],
+                blocking: false
+            },
+            7: {
+                name: "Unified Audit Review",
+                icon: "📊",
+                description: "Review and resolve Entity Resolution + Post-Ingestion queries together",
+                agents: [
+                    "Unified Audit Review Interface - Review Entity + Post-ingestion queries together"
+                ],
+                outputs: ["AUDIT_RESOLUTIONS"],
+                blocking: false,
+                note: "Pre-ingestion queries shown as read-only (already processed)"
+            },
+            8: {
+                name: "Execution of Approved Queries",
+                icon: "⚙️",
+                description: "Execute all approved audit resolutions",
+                agents: [
+                    "Audit Query Execution Agent - Execute entity resolution matches and post-ingestion fixes"
+                ],
+                outputs: ["AUDIT_EXECUTION_TRAIL"],
+                blocking: false,
+                note: "Pre-ingestion resolutions already applied in Phase 4"
+            },
+            9: {
+                name: "Final Audit Report",
+                icon: "📄",
+                description: "Generate comprehensive audit report and finalize knowledge graph",
+                agents: [
+                    "Audit Report Generation - Consolidate all audit trails",
+                    "Knowledge Graph (Source of Truth) - Final validated knowledge graph"
+                ],
+                outputs: ["FINAL_AUDIT_REPORT"],
+                blocking: false
+            }
+        };
+
+        function showDetails(phaseId) {
+            const phase = phaseData[phaseId];
+            const panel = document.getElementById('detailsPanel');
+            const overlay = document.getElementById('overlay');
+            const content = document.getElementById('detailsContent');
+
+            let html = `<h2>${phase.icon} Phase ${phaseId}: ${phase.name}</h2>`;
+            html += `<p style="color: #666; margin-bottom: 20px;">${phase.description}</p>`;
+
+            if (phase.blocking) {
+                html += `<div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-weight: bold;">🔴 BLOCKING PHASE - Must complete before Phase 4</div>`;
+            }
+
+            if (phase.note) {
+                html += `<div style="background: #fff3e0; color: #e65100; padding: 10px; border-radius: 5px; margin-bottom: 15px;">${phase.note}</div>`;
+            }
+
+            if (phase.prerequisite) {
+                html += `<div style="background: #e3f2fd; color: #1976d2; padding: 10px; border-radius: 5px; margin-bottom: 15px;">📋 ${phase.prerequisite}</div>`;
+            }
+
+            html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">Agents (${phase.agents.length})</h3>`;
+            html += `<ul style="margin-left: 20px; line-height: 1.8;">`;
+            phase.agents.forEach(agent => {
+                html += `<li style="margin-bottom: 8px;">${agent}</li>`;
+            });
+            html += `</ul>`;
+
+            html += `<h3 style="margin-top: 20px; margin-bottom: 10px;">State Keys Created (${phase.outputs.length})</h3>`;
+            html += `<div style="display: flex; flex-direction: column; gap: 5px;">`;
+            phase.outputs.forEach(key => {
+                html += `<code style="background: #f5f5f5; padding: 8px; border-radius: 4px; display: block; font-family: 'Courier New', monospace;">${key}</code>`;
+            });
+            html += `</div>`;
+
+            content.innerHTML = html;
+            panel.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function closeDetails() {
+            document.getElementById('detailsPanel').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDetails();
+            }
+        });
+    </script>
+</body>
+</html>
+
